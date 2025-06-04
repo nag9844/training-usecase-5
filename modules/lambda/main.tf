@@ -159,34 +159,34 @@ resource "aws_iam_role_policy_attachment" "lambda_sns_policy_attachment" {
   policy_arn = aws_iam_policy.lambda_sns_policy.arn
 }
 
-# Lambda code deployment package
-# data "archive_file" "lambda_zip" {
-#   type        = "zip"
-#   output_path = "${path.module}/lambda_function.zip"
-#   source {
-#     content  = file("${path.module}/src/index.js")
-#     filename = "index.js"
-#   }
-
-#   depends_on = [
-#     local_file.lambda_code
-#   ]
-# }
-
+#Lambda code deployment package
 data "archive_file" "lambda_zip" {
   type        = "zip"
   output_path = "${path.module}/lambda_function.zip"
   source {
-    # Directly use the content from local_file.lambda_code
-    content  = resource.local_file.lambda_code.content
+    content  = file("${path.module}/src/index.js")
     filename = "index.js"
   }
 
-  # The depends_on is still good for explicit ordering, though the content dependency often implies it.
   depends_on = [
     local_file.lambda_code
   ]
 }
+
+## data "archive_file" "lambda_zip" {
+#   type        = "zip"
+#   output_path = "${path.module}/lambda_function.zip"
+#   source {
+#     # Directly use the content from local_file.lambda_code
+#     content  = resource.local_file.lambda_code.content
+#     filename = "index.js"
+#   }
+
+#  # The depends_on is still good for explicit ordering, though the content dependency often implies it.
+#   depends_on = [
+#     local_file.lambda_code
+#   ]
+# }
 
 # Create Lambda code file
 resource "local_file" "lambda_code" {

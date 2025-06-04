@@ -38,7 +38,7 @@ variable "enable_bucket_versioning" {
 variable "notification_emails" {
   description = "List of email addresses to notify about image processing"
   type        = list(string)
-  default     = []
+  default     = ["vnagaraja362@gmail.com"]
 }
 
 variable "lambda_memory_size" {
