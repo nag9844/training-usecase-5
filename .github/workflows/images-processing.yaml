@@ -1,4 +1,4 @@
-name: AWS infra
+name: lambda-workflow
 
 on:
   workflow_dispatch:
