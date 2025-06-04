@@ -23,21 +23,54 @@ resource "aws_iam_role" "lambda_role" {
   }
 }
 
+# Create Lambda layer for dependencies
+resource "aws_lambda_layer_version" "dependencies" {
+  filename            = "${path.module}/lambda_layer.zip"
+  layer_name          = "${var.function_name}-dependencies"
+  compatible_runtimes = ["nodejs18.x"]
+  
+  depends_on = [
+    null_resource.install_dependencies
+  ]
+}
+
+# Install dependencies for Lambda layer
+resource "null_resource" "install_dependencies" {
+  triggers = {
+    package_json = filemd5("${path.root}/package.json")
+    package_lock = filemd5("${path.root}/package-lock.json")
+  }
+
+  provisioner "local-exec" {
+    command = <<EOT
+      mkdir -p ${path.module}/nodejs
+      cp ${path.root}/package.json ${path.module}/nodejs/
+      cp ${path.root}/package-lock.json ${path.module}/nodejs/
+      cd ${path.module}/nodejs
+      npm ci --production
+      cd ..
+      zip -r lambda_layer.zip nodejs/
+    EOT
+  }
+}
+
 # Create Lambda function
 resource "aws_lambda_function" "image_processor" {
+  filename         = data.archive_file.lambda_zip.output_path
   function_name    = var.function_name
   description      = var.description
-  role             = aws_iam_role.lambda_role.arn
-  handler          = "index.handler"
-  runtime          = "nodejs18.x"
-  filename         = data.archive_file.lambda_zip.output_path
+  role            = aws_iam_role.lambda_role.arn
+  handler         = "index.handler"
+  runtime         = "nodejs18.x"
   source_code_hash = data.archive_file.lambda_zip.output_base64sha256
-  memory_size      = var.memory_size
-  timeout          = var.timeout
+  memory_size     = var.memory_size
+  timeout         = var.timeout
+  
+  layers = [aws_lambda_layer_version.dependencies.arn]
 
   environment {
     variables = {
-      target_BUCKET = var.target_bucket_name
+      PROCESSED_BUCKET = var.target_bucket_name
       SOURCE_BUCKET    = var.source_bucket_name
       SNS_TOPIC_ARN    = var.sns_topic_arn
     }
@@ -80,9 +113,11 @@ resource "aws_iam_policy" "lambda_s3_policy" {
       {
         Effect = "Allow"
         Action = [
-          "s3:GetObject"
+          "s3:GetObject",
+          "s3:ListBucket"
         ]
         Resource = [
+          var.source_bucket_arn,
           "${var.source_bucket_arn}/*"
         ]
       },
@@ -90,9 +125,11 @@ resource "aws_iam_policy" "lambda_s3_policy" {
         Effect = "Allow"
         Action = [
           "s3:PutObject",
-          "s3:PutObjectAcl"
+          "s3:PutObjectAcl",
+          "s3:ListBucket"
         ]
         Resource = [
+          var.target_bucket_arn,
           "${var.target_bucket_arn}/*"
         ]
       }
@@ -111,6 +148,7 @@ resource "aws_iam_policy" "lambda_logs_policy" {
       {
         Effect = "Allow"
         Action = [
+          "logs:CreateLogGroup",
           "logs:CreateLogStream",
           "logs:PutLogEvents"
         ]
@@ -159,7 +197,7 @@ resource "aws_iam_role_policy_attachment" "lambda_sns_policy_attachment" {
   policy_arn = aws_iam_policy.lambda_sns_policy.arn
 }
 
-#Lambda code deployment package
+# Lambda code deployment package
 data "archive_file" "lambda_zip" {
   type        = "zip"
   output_path = "${path.module}/lambda_function.zip"
@@ -173,128 +211,9 @@ data "archive_file" "lambda_zip" {
   ]
 }
 
-## data "archive_file" "lambda_zip" {
-#   type        = "zip"
-#   output_path = "${path.module}/lambda_function.zip"
-#   source {
-#     # Directly use the content from local_file.lambda_code
-#     content  = resource.local_file.lambda_code.content
-#     filename = "index.js"
-#   }
-
-#  # The depends_on is still good for explicit ordering, though the content dependency often implies it.
-#   depends_on = [
-#     local_file.lambda_code
-#   ]
-# }
-
 # Create Lambda code file
 resource "local_file" "lambda_code" {
-  content  = <<-EOT
-    // Image processing Lambda function
-    const AWS = require('aws-sdk');
-    const sharp = require('sharp');
-    
-    const s3 = new AWS.S3();
-    const sns = new AWS.SNS();
-    
-    // Image sizes for resizing
-    const sizes = [
-      { width: 100, height: 100, suffix: 'thumbnail' },
-      { width: 800, height: null, suffix: 'medium' },
-      { width: 1200, height: null, suffix: 'large' }
-    ];
-    
-    exports.handler = async (event) => {
-      try {
-        // Get the object from the event
-        const sourceBucket = event.Records[0].s3.bucket.name;
-        const key = decodeURIComponent(event.Records[0].s3.object.key.replace(/\\+/g, ' '));
-        
-        // Skip processing if the file is not in the uploads folder or not an image
-        if (!key.startsWith('uploads/') || !key.match(/\\.(jpg|jpeg|png|gif)$/i)) {
-          console.log('Skipping non-image file:', key);
-          return;
-        }
-        
-        // Get the image from S3
-        const params = {
-          Bucket: sourceBucket,
-          Key: key
-        };
-        
-        const { Body: imageBody } = await s3.getObject(params).promise();
-        
-        // Original filename without path
-        const filename = key.split('/').pop();
-        const fileNameWithoutExt = filename.substring(0, filename.lastIndexOf('.'));
-        const extension = filename.substring(filename.lastIndexOf('.') + 1);
-        
-        // Process image for each size
-        const resizePromises = sizes.map(async (size) => {
-          const resizedImage = await sharp(imageBody)
-            .resize(size.width, size.height)
-            .toBuffer();
-          
-          const destKey = `target/$${fileNameWithoutExt}-$${size.suffix}.$${extension}`;
-          
-          await s3.putObject({
-            Bucket: process.env.target_BUCKET,
-            Key: destKey,
-            Body: resizedImage,
-            ContentType: \`image/$${extension == "jpg" ? "jpeg" : extension}\`
-          }).promise();
-          
-          return destKey;
-        });
-        
-        const resizedImageKeys = await Promise.all(resizePromises);
-        
-        // Send notification
-        await sns.publish({
-          TopicArn: process.env.SNS_TOPIC_ARN,
-          Subject: 'Image Processing Completed',
-          Message: JSON.stringify({
-            originalImage: key,
-            targetImages: resizedImageKeys,
-            timestamp: new Date().toISOString()
-          })
-        }).promise();
-        
-        console.log('Image processing completed successfully');
-        return {
-          statusCode: 200,
-          body: JSON.stringify({
-            message: 'Image processing completed successfully',
-            originalImage: key,
-            targetImages: resizedImageKeys
-          })
-        };
-        
-      } catch (error) {
-        console.error('Error processing image:', error);
-        
-        // Send error notification
-        await sns.publish({
-          TopicArn: process.env.SNS_TOPIC_ARN,
-          Subject: 'Image Processing Error',
-          Message: JSON.stringify({
-            error: error.message,
-            stack: error.stack,
-            timestamp: new Date().toISOString()
-          })
-        }).promise();
-        
-        return {
-          statusCode: 500,
-          body: JSON.stringify({
-            message: 'Error processing image',
-            error: error.message
-          })
-        };
-      }
-    };
-  EOT
+  content  = file("${path.module}/src/index.js")
   filename = "${path.module}/src/index.js"
 
   # Create directory if it doesn't exist
