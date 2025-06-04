@@ -247,10 +247,10 @@ resource "local_file" "lambda_code" {
             .resize(size.width, size.height)
             .toBuffer();
           
-          const destKey = "processed/" + fileNameWithoutExt + "-" + size.suffix + "." + extension;
+          const destKey = "target/" + fileNameWithoutExt + "-" + size.suffix + "." + extension;
           
           await s3.putObject({
-            Bucket: process.env.PROCESSED_BUCKET,
+            Bucket: process.env.TARGET_BUCKET,
             Key: destKey,
             Body: resizedImage,
             ContentType: "image/" + (extension === "jpg" ? "jpeg" : extension)
