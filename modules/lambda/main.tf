@@ -72,7 +72,7 @@ resource "aws_lambda_function" "image_processor" {
 
   environment {
     variables = {
-      PROCESSED_BUCKET = var.processed_bucket_name
+      target_bucket = var.target_bucket_name
       SOURCE_BUCKET    = var.source_bucket_name
       SNS_TOPIC_ARN    = var.sns_topic_arn
     }
@@ -131,8 +131,8 @@ resource "aws_iam_policy" "lambda_s3_policy" {
           "s3:ListBucket"
         ]
         Resource = [
-          var.processed_bucket_arn,
-          "${var.processed_bucket_arn}/*"
+          var.target_bucket_arn,
+          "${var.target_bucket_arn}/*"
         ]
       }
     ]
@@ -250,7 +250,7 @@ resource "local_file" "lambda_code" {
           const destKey = "processed/" + fileNameWithoutExt + "-" + size.suffix + "." + extension;
           
           await s3.putObject({
-            Bucket: process.env.PROCESSED_BUCKET,
+            Bucket: process.env.target_bucket,
             Key: destKey,
             Body: resizedImage,
             ContentType: "image/" + (extension === "jpg" ? "jpeg" : extension)

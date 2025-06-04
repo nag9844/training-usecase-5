@@ -12,11 +12,11 @@ resource "aws_s3_bucket" "source" {
 }
 
 resource "aws_s3_bucket" "processed" {
-  bucket        = var.processed_bucket_name
+  bucket        = var.target_bucket_name
   force_destroy = var.force_destroy
 
   tags = {
-    Name        = var.processed_bucket_name
+    Name        = var.target_bucket_name
     Environment = var.environment
     Purpose     = "Processed images storage"
   }

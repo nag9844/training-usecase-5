@@ -5,7 +5,7 @@ variable "source_bucket_name" {
   type        = string
 }
 
-variable "processed_bucket_name" {
+variable "target_bucket_name" {
   description = "Name of the processed S3 bucket"
   type        = string
 }
