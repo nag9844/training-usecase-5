@@ -8,7 +8,7 @@ variable "topic_name" {
 variable "email_subscriptions" {
   description = "List of email addresses to subscribe to the SNS topic"
   type        = list(string)
-  default     = ["vnagaraja362@gmail.com"]
+  default     = []
 }
 
 variable "environment" {

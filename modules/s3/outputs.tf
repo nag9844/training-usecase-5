@@ -15,17 +15,17 @@ output "source_bucket_arn" {
   value       = aws_s3_bucket.source.arn
 }
 
-output "target_bucket_id" {
-  description = "ID of the target S3 bucket"
-  value       = aws_s3_bucket.target.id
+output "processed_bucket_id" {
+  description = "ID of the processed S3 bucket"
+  value       = aws_s3_bucket.processed.id
 }
 
-output "target_bucket_name" {
-  description = "Name of the target S3 bucket"
-  value       = aws_s3_bucket.target.bucket
+output "processed_bucket_name" {
+  description = "Name of the processed S3 bucket"
+  value       = aws_s3_bucket.processed.bucket
 }
 
-output "target_bucket_arn" {
-  description = "ARN of the target S3 bucket"
-  value       = aws_s3_bucket.target.arn
+output "processed_bucket_arn" {
+  description = "ARN of the processed S3 bucket"
+  value       = aws_s3_bucket.processed.arn
 }

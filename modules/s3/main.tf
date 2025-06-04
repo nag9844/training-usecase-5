@@ -11,14 +11,14 @@ resource "aws_s3_bucket" "source" {
   }
 }
 
-resource "aws_s3_bucket" "target" {
-  bucket        = var.target_bucket_name
+resource "aws_s3_bucket" "processed" {
+  bucket        = var.processed_bucket_name
   force_destroy = var.force_destroy
 
   tags = {
-    Name        = var.target_bucket_name
+    Name        = var.processed_bucket_name
     Environment = var.environment
-    Purpose     = "target images storage"
+    Purpose     = "Processed images storage"
   }
 }
 
@@ -31,9 +31,9 @@ resource "aws_s3_bucket_versioning" "source_versioning" {
   }
 }
 
-# Configure versioning for target bucket
-resource "aws_s3_bucket_versioning" "target_versioning" {
-  bucket = aws_s3_bucket.target.id
+# Configure versioning for processed bucket
+resource "aws_s3_bucket_versioning" "processed_versioning" {
+  bucket = aws_s3_bucket.processed.id
   
   versioning_configuration {
     status = var.enable_versioning ? "Enabled" : "Suspended"
@@ -49,9 +49,9 @@ resource "aws_s3_bucket_public_access_block" "source_public_access_block" {
   restrict_public_buckets = true
 }
 
-# Block public access for target bucket
-resource "aws_s3_bucket_public_access_block" "target_public_access_block" {
-  bucket                  = aws_s3_bucket.target.id
+# Block public access for processed bucket
+resource "aws_s3_bucket_public_access_block" "processed_public_access_block" {
+  bucket                  = aws_s3_bucket.processed.id
   block_public_acls       = true
   block_public_policy     = true
   ignore_public_acls      = true
@@ -82,8 +82,8 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "source_encryption
   }
 }
 
-resource "aws_s3_bucket_server_side_encryption_configuration" "target_encryption" {
-  bucket = aws_s3_bucket.target.id
+resource "aws_s3_bucket_server_side_encryption_configuration" "processed_encryption" {
+  bucket = aws_s3_bucket.processed.id
 
   rule {
     apply_server_side_encryption_by_default {
