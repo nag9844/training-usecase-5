@@ -253,7 +253,7 @@ resource "local_file" "lambda_code" {
             Bucket: process.env.PROCESSED_BUCKET,
             Key: destKey,
             Body: resizedImage,
-            ContentType: \`image/\${extension === 'jpg' ? 'jpeg' : extension}\`
+            ContentType: \`image/\${extension == "jpg" ? "jpeg" : extension}\`
           }).promise();
           
           return destKey;
