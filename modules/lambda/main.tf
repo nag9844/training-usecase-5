@@ -220,10 +220,10 @@ resource "local_file" "lambda_code" {
       try {
         // Get the object from the event
         const sourceBucket = event.Records[0].s3.bucket.name;
-        const key = decodeURIComponent(event.Records[0].s3.object.key.replace(/\\+/g, ' '));
+        const key = decodeURIComponent(event.Records[0].s3.object.key.replace(/\+/g, ' '));
         
         // Skip processing if the file is not in the uploads folder or not an image
-        if (!key.startsWith('uploads/') || !key.match(/\\.(jpg|jpeg|png|gif)$/i)) {
+        if (!key.startsWith('uploads/') || !key.match(/\.(jpg|jpeg|png|gif)$/i)) {
           console.log('Skipping non-image file:', key);
           return;
         }
@@ -247,13 +247,13 @@ resource "local_file" "lambda_code" {
             .resize(size.width, size.height)
             .toBuffer();
           
-          const destKey = `processed/${fileNameWithoutExt}-${size.suffix}.${extension}`;
+          const destKey = "processed/" + fileNameWithoutExt + "-" + size.suffix + "." + extension;
           
           await s3.putObject({
             Bucket: process.env.PROCESSED_BUCKET,
             Key: destKey,
             Body: resizedImage,
-            ContentType: \`image/\${extension == "jpg" ? "jpeg" : extension}\`
+            ContentType: "image/" + (extension === "jpg" ? "jpeg" : extension)
           }).promise();
           
           return destKey;
