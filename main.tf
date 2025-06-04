@@ -37,7 +37,7 @@ module "s3_buckets" {
   source = "./modules/s3"
   
   source_bucket_name      = "${local.name_prefix}-source-${local.resource_suffix}"
-  processed_bucket_name   = "${local.name_prefix}-processed-${local.resource_suffix}"
+  target_bucket_name   = "${local.name_prefix}-target-${local.resource_suffix}"
   force_destroy           = var.force_destroy_buckets
   environment             = var.environment
   enable_versioning       = var.enable_bucket_versioning
@@ -60,8 +60,8 @@ module "lambda" {
   description             = "Processes and resizes images from S3"
   source_bucket_name      = module.s3_buckets.source_bucket_name
   source_bucket_arn       = module.s3_buckets.source_bucket_arn
-  processed_bucket_name   = module.s3_buckets.processed_bucket_name
-  processed_bucket_arn    = module.s3_buckets.processed_bucket_arn
+  target_bucket_name   = module.s3_buckets.target_bucket_name
+  target_bucket_arn    = module.s3_buckets.target_bucket_arn
   sns_topic_arn           = module.sns.topic_arn
   environment             = var.environment
   memory_size             = var.lambda_memory_size
