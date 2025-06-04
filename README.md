@@ -36,7 +36,7 @@ The system automatically:
 
 2. Update the `terraform.tfvars` file with your configuration:
    ```
-   aws_region = "us-east-1"
+   aws_region = "ap-south-1"
    project_name = "img-processor"
    environment = "dev"
    notification_emails = ["your-email@example.com"]
