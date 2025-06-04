@@ -37,17 +37,19 @@ resource "aws_lambda_layer_version" "dependencies" {
 # Install dependencies for Lambda layer
 resource "null_resource" "install_dependencies" {
   triggers = {
-    package_json = filemd5("${path.root}/package.json")
-    package_lock = filemd5("${path.root}/package-lock.json")
+    dependencies_versions = jsonencode({
+      sharp = "0.32.6"
+      aws-sdk = "2.1450.0"
+    })
   }
 
   provisioner "local-exec" {
     command = <<EOT
+      rm -rf ${path.module}/nodejs
       mkdir -p ${path.module}/nodejs
-      cp ${path.root}/package.json ${path.module}/nodejs/
-      cp ${path.root}/package-lock.json ${path.module}/nodejs/
       cd ${path.module}/nodejs
-      npm ci --production
+      npm init -y
+      npm install sharp@0.32.6 aws-sdk@2.1450.0 --save
       cd ..
       zip -r lambda_layer.zip nodejs/
     EOT
@@ -197,27 +199,127 @@ resource "aws_iam_role_policy_attachment" "lambda_sns_policy_attachment" {
   policy_arn = aws_iam_policy.lambda_sns_policy.arn
 }
 
-# Lambda code deployment package
-data "archive_file" "lambda_zip" {
-  type        = "zip"
-  output_path = "${path.module}/lambda_function.zip"
-  source {
-    content  = file("${path.module}/src/index.js")
-    filename = "index.js"
-  }
-
-  depends_on = [
-    local_file.lambda_code
-  ]
-}
-
 # Create Lambda code file
 resource "local_file" "lambda_code" {
-  content  = file("${path.module}/src/index.js")
+  content  = <<-EOT
+    // Image processing Lambda function
+    const AWS = require('aws-sdk');
+    const sharp = require('sharp');
+    
+    const s3 = new AWS.S3();
+    const sns = new AWS.SNS();
+    
+    // Image sizes for resizing
+    const sizes = [
+      { width: 100, height: 100, suffix: 'thumbnail' },
+      { width: 800, height: null, suffix: 'medium' },
+      { width: 1200, height: null, suffix: 'large' }
+    ];
+    
+    exports.handler = async (event) => {
+      try {
+        // Get the object from the event
+        const sourceBucket = event.Records[0].s3.bucket.name;
+        const key = decodeURIComponent(event.Records[0].s3.object.key.replace(/\\+/g, ' '));
+        
+        // Skip processing if the file is not in the uploads folder or not an image
+        if (!key.startsWith('uploads/') || !key.match(/\\.(jpg|jpeg|png|gif)$/i)) {
+          console.log('Skipping non-image file:', key);
+          return;
+        }
+        
+        // Get the image from S3
+        const params = {
+          Bucket: sourceBucket,
+          Key: key
+        };
+        
+        const { Body: imageBody } = await s3.getObject(params).promise();
+        
+        // Original filename without path
+        const filename = key.split('/').pop();
+        const fileNameWithoutExt = filename.substring(0, filename.lastIndexOf('.'));
+        const extension = filename.substring(filename.lastIndexOf('.') + 1);
+        
+        // Process image for each size
+        const resizePromises = sizes.map(async (size) => {
+          const resizedImage = await sharp(imageBody)
+            .resize(size.width, size.height)
+            .toBuffer();
+          
+          const destKey = `processed/${fileNameWithoutExt}-${size.suffix}.${extension}`;
+          
+          await s3.putObject({
+            Bucket: process.env.PROCESSED_BUCKET,
+            Key: destKey,
+            Body: resizedImage,
+            ContentType: \`image/\${extension === 'jpg' ? 'jpeg' : extension}\`
+          }).promise();
+          
+          return destKey;
+        });
+        
+        const resizedImageKeys = await Promise.all(resizePromises);
+        
+        // Send notification
+        await sns.publish({
+          TopicArn: process.env.SNS_TOPIC_ARN,
+          Subject: 'Image Processing Completed',
+          Message: JSON.stringify({
+            originalImage: key,
+            processedImages: resizedImageKeys,
+            timestamp: new Date().toISOString()
+          })
+        }).promise();
+        
+        console.log('Image processing completed successfully');
+        return {
+          statusCode: 200,
+          body: JSON.stringify({
+            message: 'Image processing completed successfully',
+            originalImage: key,
+            processedImages: resizedImageKeys
+          })
+        };
+        
+      } catch (error) {
+        console.error('Error processing image:', error);
+        
+        // Send error notification
+        await sns.publish({
+          TopicArn: process.env.SNS_TOPIC_ARN,
+          Subject: 'Image Processing Error',
+          Message: JSON.stringify({
+            error: error.message,
+            stack: error.stack,
+            timestamp: new Date().toISOString()
+          })
+        }).promise();
+        
+        return {
+          statusCode: 500,
+          body: JSON.stringify({
+            message: 'Error processing image',
+            error: error.message
+          })
+        };
+      }
+    };
+  EOT
   filename = "${path.module}/src/index.js"
 
   # Create directory if it doesn't exist
   provisioner "local-exec" {
     command = "mkdir -p ${path.module}/src"
+  }
+}
+
+# Lambda code deployment package
+data "archive_file" "lambda_zip" {
+  type        = "zip"
+  output_path = "${path.module}/lambda_function.zip"
+  source {
+    content  = local_file.lambda_code.content
+    filename = "index.js"
   }
 }
