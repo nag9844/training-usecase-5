@@ -143,7 +143,7 @@ jobs:
             const planOutput = fs.readFileSync('plan.md', 'utf8');
             const prNumber = context.payload.pull_request.number;
             // Customize the header and content
-            const commentBody = `## 📝 Terraform Plan Details for PR #${prNumber}\n\n\`\`\`hcl\n${planOutput}\n\`\`\``;
+            const commentBody = `## Terraform Plan Details for PR #${prNumber}\n\n\`\`\`hcl\n${planOutput}\n\`\`\``;
 
             github.rest.issues.createComment({
               issue_number: prNumber,
