@@ -1,75 +1,95 @@
-# .terraform-docs.yml
-
-# Specifies the formatter to use for the output.
-# 'markdown table' is generally the most readable for GitHub READMEs.
 formatter: markdown table
 
-# Specifies the file to read the header content from.
-# If your README.md already has a custom header, this can inject it.
-# Common practice is to leave this empty or point to a small header.md file.
-# If you don't have a separate header, you can remove this line.
-header-from: main.tf # Or header.md, or leave empty if you inject it into existing README.md
+version: ">= 0.14.0"
 
-# Specifies the file to read the footer content from.
-# Similar to header-from, for adding custom content at the end.
-# If you don't have a separate footer, you can remove this line.
+header-from: main.tf
 footer-from: ""
 
-# Configuration for how the output is handled.
-output:
-  file: README.md # The file where the generated documentation will be written.
-  mode: inject   # How to update the file:
-                 #   - 'inject': (Recommended) Replaces content between `` and `` markers.
-                 #   - 'replace': Overwrites the entire file.
-                 #   - 'print': Prints to stdout (useful for debugging, not for file generation).
-  template: |-    # If you use 'inject' mode, this defines the delimiters and where the content goes.
-    {{ .Content }}
-    # Control which sections of the documentation are displayed.
-# You can hide specific sections, or specify which ones to show.
-# If both 'hide' and 'show' are used, 'hide' takes precedence.
-sections:
-  hide:
-    # - data-sources
-    # - requirements
-    # - providers
-  show:
-    - header
-    - providers
-    - requirements
-    - inputs
-    - outputs
-    # - resources
-    # - modules
-
-# Configuration for how items within sections are sorted.
-sort:
-  enabled: true # Enable sorting for inputs, outputs, etc.
-  by: name      # Sort by 'name', 'required', or 'type'. 'name' is common.
-
-# Configuration for how input variables and output values are displayed.
-output-values:
-  enabled: false # Set to true to include output values in the documentation.
-  from: ""       # Optionally read from a specific file, e.g., 'outputs.tf'.
-
-# Various settings to fine-tune the output.
-settings:
-  anchor: true         # Add HTML anchors for easy linking to sections.
-  color: false         # Disable color output (good for plain Markdown files).
-  default: true        # Show default values for variables.
-  description: true    # Show descriptions for inputs/outputs/etc.
-  escape: true         # Escape special Markdown characters in descriptions.
-  hide-empty: false    # Hide sections if they are empty (e.g., if no inputs).
-  html: true           # Include HTML in the output (e.g., for anchors).
-  indent: 2            # Indentation for nested blocks (e.g., variable types).
-  lockfile: true       # Show terraform.lock.hcl content.
-  read-comments: true  # Read comments from .tf files and include them.
-  required: true       # Indicate if inputs are required.
-  sensitive: true      # Mask sensitive output values.
-  type: true           # Show variable types.
-
-# If you have nested modules and want to generate docs for them recursively,
-# you can configure this. Usually, you'd run terraform-docs in each module directory.
 recursive:
-  enabled: false # Set to true if you want to generate documentation for submodules.
-  path: modules  # If enabled, specify the directory where your modules are.
-  include-main: false # Include the main module's documentation when recursing.
+  enabled: true
+  path: modules
+
+sections:
+  hide: []
+  show: []
+
+content: |-
+  {{ .Header }}
+
+  ## Usage
+
+  Basic usage of this module is as follows:
+
+  ```hcl
+  module "example" {
+    source = "{{ .Path }}"
+    # Required variables
+    aws_region         = "us-east-1"
+    project_name       = "img-processor"
+    environment        = "dev"
+    notification_emails = ["admin@example.com"]
+  }
+  ```
+
+  {{ .Inputs }}
+
+  {{ .Outputs }}
+
+  {{ .Providers }}
+
+  {{ .Requirements }}
+
+  {{ .Resources }}
+
+  {{ .Modules }}
+
+output:
+  file: "README.md"
+  mode: replace
+  template: |-
+    # {{ .Name }}
+
+    {{ .Header }}
+
+    ## Requirements
+
+    {{ .Requirements }}
+
+    ## Providers
+
+    {{ .Providers }}
+
+    ## Modules
+
+    {{ .Modules }}
+
+    ## Resources
+
+    {{ .Resources }}
+
+    ## Inputs
+
+    {{ .Inputs }}
+
+    ## Outputs
+
+    {{ .Outputs }}
+
+sort:
+  enabled: true
+  by: required
+
+settings:
+  anchor: true
+  color: true
+  default: true
+  description: false
+  escape: true
+  hide-empty: false
+  html: true
+  indent: 2
+  lockfile: true
+  read-comments: true
+  required: true
+  sensitive: true
+  type: true
