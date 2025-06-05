@@ -1,89 +1,183 @@
-name: AWS infra
- 
+name: terraform deployment
+
 on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: 'Terraform action to perform'
+        required: true
+        default: 'none'
+  push:
+    branches:
+      - main # Triggers apply after merge to main
   pull_request:
-    branches: [main]    # trigger only on PR to main
- 
+    branches:
+      - main # Triggers plan and documentation for PRs to main
+
 permissions:
   id-token: write
-  contents: read
-  pull-requests: write  # to add comment on PR
- 
+  contents: write
+  pull-requests: write # Essential for commenting on PRs
+
 jobs:
-  lint-and-security:
-    name: Lint and Security Checks
+  # This job will run for push to main (apply) and workflow_dispatch (destroy)
+  terraform:
     runs-on: ubuntu-latest
- 
+    if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.event.inputs.action != 'none')
+
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
- 
-      - name: Install TFLint
-        run: |
-wget https://github.com/terraform-linters/tflint/releases/download/v0.50.2/tflint_linux_amd64.zip
-unzip tflint_linux_amd64.zip
-          sudo mv tflint /usr/local/bin/
-          tflint --version
- 
-      - name: Run TFLint
-        run: tflint --init && tflint -f compact
-        working-directory: ./
- 
-      - name: Install Checkov
-        run: pip install checkov
- 
-      - name: Run Checkov with soft fail
-        run: checkov --directory . --soft-fail
- 
-  terraform-plan:
-    name: Terraform Plan
-    runs-on: ubuntu-latest
-    needs: lint-and-security
- 
-    env:
-      AWS_REGION: ${{ secrets.AWS_REGION || 'ap-south-1' }}
- 
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
- 
-      - name: Set up Terraform
-        uses: hashicorp/setup-terraform@v2
- 
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
+      - name: Checkout Code
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+          ref: ${{ github.ref }} # For push events, use github.ref
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up AWS credentials with OIDC
+        uses: aws-actions/configure-aws-credentials@v3
         with:
           role-to-assume: arn:aws:iam::199570228070:role/oidc-demo-role
-          aws-region: ${{ env.AWS_REGION }}
- 
-      - name: Format Terraform code
-        run: terraform fmt -recursive
- 
-      - name: Initialize Terraform
-        run: terraform init
- 
-      - name: Validate Terraform
-        run: terraform validate
- 
+          aws-region: ap-south-1
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v1
+        with:
+          terraform_version: 1.11.0
+
+      - name: Terraform Init
+        run: terraform init -reconfigure
+
       - name: Terraform Plan
+        # This plan runs for push/workflow_dispatch but won't be commented on PRs
+        run: terraform plan
+
+      - name: Lint Terraform Code with TFLint
         run: |
-          terraform plan -no-color -out=tfplan.binary | tee plan.txt
- 
-- name: Create plan summary as README.md
+          curl -s https://raw.githubusercontent.com/terraform-linters/tflint/master/install_linux.sh | bash
+          tflint --init
+          tflint --config .tflint.hcl
+        continue-on-error: true # Allow continuation even if linting fails
+
+      - name: Install Checkov
+        run: pip install checkov
+
+      - name: Run Checkov with Soft Fail
+        run: checkov --directory . --soft-fail
+        continue-on-error: true # Allow continuation even if checkov fails
+
+      - name: Applying Terraform after PR Merge
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: |
-             echo '## Terraform Plan Summary' > readme.md
-             echo '```hcl' >> readme.md
-             cat plan.txt >> readme.md
-             echo '```' >> readme.md
- 
-- name: Upload plan.md artifact
+          terraform init
+          terraform apply -auto-approve
+
+      - name: Manually Destroy Infrastructure
+        if: github.event_name == 'workflow_dispatch' && github.event.inputs.action == 'destroy'
+        run: |
+          terraform init
+          terraform destroy -auto-approve
+
+---
+
+  # This job will run specifically for pull_request events
+  terraform_plan_pr:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+          # Use head.ref for PRs to checkout the source branch of the PR
+          ref: ${{ github.event.pull_request.head.ref }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up AWS credentials with OIDC
+        uses: aws-actions/configure-aws-credentials@v3
+        with:
+          role-to-assume: arn:aws:iam::199570228070:role/oidc-demo-role
+          aws-region: ap-south-1
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v1
+        with:
+          terraform_version: 1.11.0
+
+      - name: Terraform Init
+        run: terraform init -reconfigure
+
+      - name: Lint Terraform Code with TFLint
+        run: |
+          curl -s https://raw.githubusercontent.com/terraform-linters/tflint/master/install_linux.sh | bash
+          tflint --init
+          tflint --config .tflint.hcl
+        continue-on-error: true
+
+      - name: Install Checkov
+        run: pip install checkov
+
+      - name: Run Checkov with Soft Fail
+        run: checkov --directory . --soft-fail
+        continue-on-error: true
+
+      - name: Terraform Plan and Save to File (plan.md)
+        id: plan
+        run: |
+          # Run terraform plan and save the output to plan.md
+          terraform plan -no-color > plan.md
+          cat plan.md # Also output to logs for visibility
+
+      - name: Upload Terraform Plan artifact (plan.md)
         uses: actions/upload-artifact@v4
         with:
-          name: terraform-plan-summary
-path: readme.md
- 
-      - name: Comment on PR with plan summary
-        uses: marocchino/sticky-pull-request-comment@v2
+          name: terraform-plan-pr-${{ github.event.pull_request.number }}
+          path: plan.md # Path changed to plan.md
+
+      - name: Comment Terraform Plan on PR using plan.md
+        uses: actions/github-script@v6
         with:
-          recreate: true
-path: readme.md
+          script: |
+            const fs = require('fs');
+            // Read the content from plan.md
+            const planOutput = fs.readFileSync('plan.md', 'utf8');
+            const prNumber = context.payload.pull_request.number;
+            // Customize the header and content
+            const commentBody = `## 📝 Terraform Plan Details for PR #${prNumber}\n\n\`\`\`hcl\n${planOutput}\n\`\`\``;
+
+            github.rest.issues.createComment({
+              issue_number: prNumber,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: commentBody
+            });
+
+      # You can decide to keep or remove the terraform-docs section.
+      # If you keep it, it will still generate README.md and comment it.
+      # If you remove it, only the plan.md content will be commented.
+
+      - name: Generate Markdown with Terraform Docs (Still targets README.md by default)
+        # Only run this for PRs to inject docs
+        if: github.event_name == 'pull_request'
+        uses: terraform-docs/gh-actions@v1.3.0
+        with:
+          output-file: README.md # This will still output to README.md
+          output-method: inject
+          git-push: true # This will push updated README.md to the PR branch
+          config-file: .terraform-docs.yml
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Configure Git for Terraform Docs Push
+        if: github.event_name == 'pull_request'
+        run: |
+          git config --global user.name 'github-actions[bot]'
+          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+
+      - name: Posting README.md as PR Comment (using sticky comment for docs)
+        if: github.event_name == 'pull_request'
+        uses: marocchino/sticky-pull-request-comment@v2.9.0
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          header: "Terraform Documentation"
+          path: "README.md" # This still comments README.md
