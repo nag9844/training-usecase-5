@@ -82,7 +82,7 @@ jobs:
  
       - name: Generate Terraform Docs
         run: |
-          terraform-docs markdown table . > PLAN.md
+          terraform-docs markdown table . > README.md
  
       - name: Commit Terraform Docs
         run: |
