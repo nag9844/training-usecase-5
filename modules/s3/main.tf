@@ -25,7 +25,7 @@ resource "aws_s3_bucket" "processed" {
 # Configure versioning for source bucket
 resource "aws_s3_bucket_versioning" "source_versioning" {
   bucket = aws_s3_bucket.source.id
-  
+
   versioning_configuration {
     status = var.enable_versioning ? "Enabled" : "Suspended"
   }
@@ -34,7 +34,7 @@ resource "aws_s3_bucket_versioning" "source_versioning" {
 # Configure versioning for processed bucket
 resource "aws_s3_bucket_versioning" "processed_versioning" {
   bucket = aws_s3_bucket.processed.id
-  
+
   versioning_configuration {
     status = var.enable_versioning ? "Enabled" : "Suspended"
   }

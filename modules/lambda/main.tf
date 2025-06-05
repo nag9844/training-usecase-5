@@ -28,7 +28,7 @@ resource "aws_lambda_layer_version" "dependencies" {
   filename            = "${path.module}/lambda_layer.zip"
   layer_name          = "${var.function_name}-dependencies"
   compatible_runtimes = ["nodejs18.x"]
-  
+
   depends_on = [
     null_resource.install_dependencies
   ]
@@ -38,7 +38,7 @@ resource "aws_lambda_layer_version" "dependencies" {
 resource "null_resource" "install_dependencies" {
   triggers = {
     dependencies_versions = jsonencode({
-      sharp = "0.32.6"
+      sharp   = "0.32.6"
       aws-sdk = "2.1450.0"
     })
   }
@@ -61,20 +61,20 @@ resource "aws_lambda_function" "image_processor" {
   filename         = data.archive_file.lambda_zip.output_path
   function_name    = var.function_name
   description      = var.description
-  role            = aws_iam_role.lambda_role.arn
-  handler         = "index.handler"
-  runtime         = "nodejs18.x"
+  role             = aws_iam_role.lambda_role.arn
+  handler          = "index.handler"
+  runtime          = "nodejs18.x"
   source_code_hash = data.archive_file.lambda_zip.output_base64sha256
-  memory_size     = var.memory_size
-  timeout         = var.timeout
-  
+  memory_size      = var.memory_size
+  timeout          = var.timeout
+
   layers = [aws_lambda_layer_version.dependencies.arn]
 
   environment {
     variables = {
       target_bucket = var.target_bucket_name
-      SOURCE_BUCKET    = var.source_bucket_name
-      SNS_TOPIC_ARN    = var.sns_topic_arn
+      SOURCE_BUCKET = var.source_bucket_name
+      SNS_TOPIC_ARN = var.sns_topic_arn
     }
   }
 
