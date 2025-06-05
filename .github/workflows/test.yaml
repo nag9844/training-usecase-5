@@ -11,7 +11,7 @@ on:
 # Use GitHub OIDC to authenticate with AWS
 permissions:
   id-token: write
-  contents: write           # Keep write for this job
+  contents: write
   pull-requests: write
 
 jobs:
@@ -19,7 +19,7 @@ jobs:
     name: Terraform
     runs-on: ubuntu-latest
     permissions:
-      contents: write        # Grant write permission specifically for this job
+      contents: write
       pull-requests: write
       id-token: write
 
@@ -31,36 +31,89 @@ jobs:
         uses: actions/checkout@v4
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          fetch-depth: 0 # Ensure full history is fetched for rebase
+          fetch-depth: 0 
+      
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v2
+        
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::199570228070:role/oidc-demo-role
+          aws-region: ${{ env.AWS_REGION }}
+      
+      - name: Terraform Format
+        id: fmt
+        run: terraform fmt -recursive
+      
+      - name: Terraform Init
+        id: init
+        run: terraform init
+      
+      - name: Terraform Validate
+        id: validate
+        run: terraform validate -no-color
+      
+      # Remove the manual Setup Node.js if only used for terraform-docs.
+      # The terraform-docs action itself doesn't require Node.js directly.
+      # If you have other Node.js-based tools, keep it.
+      # - name: Setup Node.js
+      #   if: github.event_name == 'pull_request'
+      #   uses: actions/setup-node@v3
+      #   with:
+      #     node-version: '18'
 
-      # ... (rest of your existing steps: Set up Terraform, Configure AWS, Format, Init, Validate, Node.js, Install terraform-docs)
-
+      # REMOVE THIS STEP:
+      # - name: Install terraform-docs
+      #   if: github.event_name == 'pull_request'
+      #   run: |
+      #     curl -sSLo ./terraform-docs.tar.gz https://terraform-docs.io/dl/v0.16.0/terraform-docs-v0.16.0-$(uname)-amd64.tar.gz
+      #     tar -xzf terraform-docs.tar.gz
+      #     chmod +x terraform-docs
+      #     sudo mv terraform-docs /usr/local/bin/
+      
       - name: Generate Terraform Docs and Commit
         if: github.event_name == 'pull_request'
-        run: |
-          git config --local user.email "vnagaraj984@gmail.com"
-          git config --local user.name "nag9844"
+        # --- REPLACED WITH terraform-docs/gh-actions ---
+        uses: terraform-docs/gh-actions@v1.3.0 # Use the official action
+        with:
+          output-file: README.md             # The file to generate
+          output-method: inject              # How to write to the file
+          config-file: .terraform-docs.yml   # Your config file
+          git-push: true                     # Have the action push the changes directly
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # Required for git-push
+
+      # REMOVE THESE GIT CONFIG AND PUSH STEPS FOR README.md, as terraform-docs/gh-actions handles it:
+      # - name: Configure Git
+      #   if: github.event_name == 'pull_request'
+      #   run: |
+      #     git config --local user.email "vnagaraj984@gmail.com"
+      #     git config --local user.name "nag9844"
+      # - name: Commit README.md
+      #   if: github.event_name == 'pull_request'
+      #   run: |
+      #     # This part is now handled by git-push: true in terraform-docs/gh-actions
+      #     git add README.md
+      #     if [ -n "$(git status --porcelain README.md)" ]; then
+      #       echo "README.md changed, committing."
+      #       git commit -m "docs: Update README.md"
+      #     else
+      #       echo "README.md is up to date."
+      #     fi
           
-          terraform-docs .
-
-          # Check if README.md has changed. If so, add and commit.
-          # Use `git status --porcelain` to detect changes more reliably for auto-generated files
-          if [ -n "$(git status --porcelain README.md)" ]; then
-            echo "README.md changed, committing."
-            git add README.md
-            git commit -m "docs: Update README.md"
-          else
-            echo "README.md is up to date."
-          fi
-
       - name: Terraform Plan and Commit
         id: plan
         if: github.event_name == 'pull_request'
         run: |
-          # Git user config is sticky per run, no need to set again here
+          # Git user config is sticky per run, no need to set again here if terraform-docs action set it
+          # If terraform-docs action is not used, you'd need to set user.email/name here again.
+          # For consistency, it's good to set it once before any commits.
+          git config --local user.email "vnagaraj984@gmail.com"
+          git config --local user.name "nag9844"
+
           terraform plan -no-color -input=false > plan.txt
           
-          # Check if plan.txt has changed. If so, add and commit.
           if [ -n "$(git status --porcelain plan.txt)" ]; then
             echo "plan.txt changed, committing."
             git add plan.txt
@@ -69,32 +122,30 @@ jobs:
             echo "plan.txt is up to date."
           fi
 
-      - name: Push generated changes
+      # The 'Push generated changes' step will now only push the plan.txt changes,
+      # as terraform-docs/gh-actions already pushed README.md
+      - name: Push generated plan.txt changes
         if: github.event_name == 'pull_request'
         run: |
-          echo "Checking Git status before pull/push:"
+          echo "Checking Git status before push:"
           git status
           echo "Listing untracked files (if any):"
-          git clean -n -d # Shows what would be removed, but doesn't remove it
+          git clean -n -d
 
-          # Ensure no lingering uncommitted/unstaged changes before pull/push
-          # Force add and commit any last-minute untracked changes for robustness
-          # This is a strong measure; use with caution.
-          git add .
-          if ! git diff --cached --quiet; then # Check if there are staged changes
-            echo "Committing any remaining staged changes."
-            git commit -m "chore: Final commit of generated files" || true # || true to prevent job failure if no changes
-          fi
+          # Check if there are any local commits to push (from plan.txt)
+          # We don't need `git add .` before this check if we expect only plan.txt to be pending
+          # And we don't need `git pull --rebase` here, as the terraform-docs action would have handled that
+          # for its push, and `git push` itself can do a fast-forward merge if possible.
           
-          # Now, check if there are any local commits to push
-          # This ensures we don't try to pull/push if nothing was committed by this workflow
+          # This check determines if there are local commits not yet on remote.
+          # It's specifically for commits generated by this job's `git commit -m "chore: Update plan.txt"`
           if ! git diff --quiet origin/${{ github.head_ref }}; then
-            echo "Local commits detected. Performing pull --rebase and push."
-            # The git pull --rebase command needs to be robust
-            git pull --rebase origin ${{ github.head_ref }} && \
+            echo "Local commits detected (for plan.txt). Performing push."
+            # Simpler push, assuming the terraform-docs action has already handled its push
+            # and potentially a rebase if needed for its changes.
             git push origin HEAD:${{ github.head_ref }}
           else
-            echo "No new local commits to push from this workflow."
+            echo "No new local commits from this workflow to push."
           fi
       
       - name: Update Pull Request Comment
