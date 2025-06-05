@@ -3,7 +3,7 @@
 This project provides a complete infrastructure as code (IaC) solution for an automated image processing and management system using AWS services.
 
 ## Architecture
-
+.
 The system automatically:
 1. Detects new image uploads to a source S3 bucket
 2. Processes the images (resizes to multiple dimensions)
