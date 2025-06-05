@@ -2,7 +2,7 @@
 
 resource "aws_sns_topic" "notifications" {
   name = var.topic_name
-  
+
   tags = {
     Name        = var.topic_name
     Environment = var.environment
@@ -11,10 +11,10 @@ resource "aws_sns_topic" "notifications" {
 
 # Create email subscriptions with confirmation disabled
 resource "aws_sns_topic_subscription" "email_subscriptions" {
-  count     = length(var.email_subscriptions)
-  topic_arn = aws_sns_topic.notifications.arn
-  protocol  = "email"
-  endpoint  = var.email_subscriptions[count.index]
+  count                  = length(var.email_subscriptions)
+  topic_arn              = aws_sns_topic.notifications.arn
+  protocol               = "email"
+  endpoint               = var.email_subscriptions[count.index]
   endpoint_auto_confirms = true
 
   depends_on = [aws_sns_topic.notifications]

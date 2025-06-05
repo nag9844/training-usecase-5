@@ -16,7 +16,7 @@ variable "environment" {
   description = "Environment (dev, staging, prod)"
   type        = string
   default     = "dev"
-  
+
   validation {
     condition     = contains(["dev", "staging", "prod"], var.environment)
     error_message = "Environment must be one of: dev, staging, prod."
@@ -45,7 +45,7 @@ variable "lambda_memory_size" {
   description = "Memory allocation for Lambda function in MB"
   type        = number
   default     = 512
-  
+
   validation {
     condition     = var.lambda_memory_size >= 128 && var.lambda_memory_size <= 10240
     error_message = "Lambda memory size must be between 128 and 10240 MB."
@@ -56,7 +56,7 @@ variable "lambda_timeout" {
   description = "Timeout for Lambda function in seconds"
   type        = number
   default     = 60
-  
+
   validation {
     condition     = var.lambda_timeout >= 3 && var.lambda_timeout <= 900
     error_message = "Lambda timeout must be between 3 and 900 seconds."
@@ -66,8 +66,8 @@ variable "lambda_timeout" {
 variable "default_tags" {
   description = "Default tags to apply to all resources"
   type        = map(string)
-  default     = {
-    Project     = "ImageProcessor"
-    ManagedBy   = "Terraform"
+  default = {
+    Project   = "ImageProcessor"
+    ManagedBy = "Terraform"
   }
 }
