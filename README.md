@@ -1,41 +1,55 @@
-A utility to generate documentation from Terraform modules in various output formats
+## Requirements
 
-Usage:
-  terraform-docs [PATH] [flags]
-  terraform-docs [command]
+| Name | Version |
+|------|---------|
+| <a name="requirement_terraform"></a> [terraform](#requirement\_terraform) | >= 1.12.0 |
+| <a name="requirement_aws"></a> [aws](#requirement\_aws) | ~> 5.0 |
 
-Available Commands:
-  asciidoc    Generate AsciiDoc of inputs and outputs
-  completion  Generate shell completion code for the specified shell (bash or zsh)
-  help        Help about any command
-  json        Generate JSON of inputs and outputs
-  markdown    Generate Markdown of inputs and outputs
-  pretty      Generate colorized pretty of inputs and outputs
-  tfvars      Generate terraform.tfvars of inputs
-  toml        Generate TOML of inputs and outputs
-  version     Print the version number of terraform-docs
-  xml         Generate XML of inputs and outputs
-  yaml        Generate YAML of inputs and outputs
+## Providers
 
-Flags:
-  -c, --config string               config file name (default ".terraform-docs.yml")
-      --footer-from string          relative path of a file to read footer from (default "")
-      --header-from string          relative path of a file to read header from (default "main.tf")
-  -h, --help                        help for terraform-docs
-      --hide strings                hide section [all, data-sources, footer, header, inputs, modules, outputs, providers, requirements, resources]
-      --lockfile                    read .terraform.lock.hcl if exist (default true)
-      --output-check                check if content of output file is up to date (default false)
-      --output-file string          file path to insert output into (default "")
-      --output-mode string          output to file method [inject, replace] (default "inject")
-      --output-template string      output template (default "<!-- BEGIN_TF_DOCS -->\n{{ .Content }}\n<!-- END_TF_DOCS -->")
-      --output-values               inject output values into outputs (default false)
-      --output-values-from string   inject output values from file into outputs (default "")
-      --read-comments               use comments as description when description is empty (default true)
-      --recursive                   update submodules recursively (default false)
-      --recursive-path string       submodules path to recursively update (default "modules")
-      --show strings                show section [all, data-sources, footer, header, inputs, modules, outputs, providers, requirements, resources]
-      --sort                        sort items (default true)
-      --sort-by string              sort items by criteria [name, required, type] (default "name")
-  -v, --version                     version for terraform-docs
+| Name | Version |
+|------|---------|
+| <a name="provider_aws"></a> [aws](#provider\_aws) | 5.99.1 |
+| <a name="provider_random"></a> [random](#provider\_random) | 3.7.2 |
 
-Use "terraform-docs [command] --help" for more information about a command.
+## Modules
+
+| Name | Source | Version |
+|------|--------|---------|
+| <a name="module_lambda"></a> [lambda](#module\_lambda) | ./modules/lambda | n/a |
+| <a name="module_s3_buckets"></a> [s3\_buckets](#module\_s3\_buckets) | ./modules/s3 | n/a |
+| <a name="module_sns"></a> [sns](#module\_sns) | ./modules/sns | n/a |
+
+## Resources
+
+| Name | Type |
+|------|------|
+| [aws_s3_bucket_notification.bucket_notification](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/s3_bucket_notification) | resource |
+| [random_string.suffix](https://registry.terraform.io/providers/hashicorp/random/latest/docs/resources/string) | resource |
+
+## Inputs
+
+| Name | Description | Type | Default | Required |
+|------|-------------|------|---------|:--------:|
+| <a name="input_aws_region"></a> [aws\_region](#input\_aws\_region) | AWS region to deploy resources | `string` | `"ap-south-1"` | no |
+| <a name="input_default_tags"></a> [default\_tags](#input\_default\_tags) | Default tags to apply to all resources | `map(string)` | <pre>{<br>  "ManagedBy": "Terraform",<br>  "Project": "ImageProcessor"<br>}</pre> | no |
+| <a name="input_enable_bucket_versioning"></a> [enable\_bucket\_versioning](#input\_enable\_bucket\_versioning) | Enable versioning on S3 buckets | `bool` | `true` | no |
+| <a name="input_environment"></a> [environment](#input\_environment) | Environment (dev, staging, prod) | `string` | `"dev"` | no |
+| <a name="input_force_destroy_buckets"></a> [force\_destroy\_buckets](#input\_force\_destroy\_buckets) | Boolean to force destruction of S3 buckets even if not empty | `bool` | `false` | no |
+| <a name="input_lambda_memory_size"></a> [lambda\_memory\_size](#input\_lambda\_memory\_size) | Memory allocation for Lambda function in MB | `number` | `512` | no |
+| <a name="input_lambda_timeout"></a> [lambda\_timeout](#input\_lambda\_timeout) | Timeout for Lambda function in seconds | `number` | `60` | no |
+| <a name="input_notification_emails"></a> [notification\_emails](#input\_notification\_emails) | List of email addresses to notify about image processing | `list(string)` | <pre>[<br>  "vnagaraja362@gmail.com"<br>]</pre> | no |
+| <a name="input_project_name"></a> [project\_name](#input\_project\_name) | Name of the project | `string` | `"img-processor"` | no |
+
+## Outputs
+
+| Name | Description |
+|------|-------------|
+| <a name="output_lambda_function_arn"></a> [lambda\_function\_arn](#output\_lambda\_function\_arn) | ARN of the Lambda function |
+| <a name="output_lambda_function_name"></a> [lambda\_function\_name](#output\_lambda\_function\_name) | Name of the Lambda function |
+| <a name="output_sns_topic_arn"></a> [sns\_topic\_arn](#output\_sns\_topic\_arn) | ARN of the SNS topic |
+| <a name="output_sns_topic_name"></a> [sns\_topic\_name](#output\_sns\_topic\_name) | Name of the SNS topic |
+| <a name="output_source_bucket_arn"></a> [source\_bucket\_arn](#output\_source\_bucket\_arn) | ARN of the source S3 bucket |
+| <a name="output_source_bucket_name"></a> [source\_bucket\_name](#output\_source\_bucket\_name) | Name of the source S3 bucket |
+| <a name="output_target_bucket_arn"></a> [target\_bucket\_arn](#output\_target\_bucket\_arn) | ARN of the processed S3 bucket |
+| <a name="output_target_bucket_name"></a> [target\_bucket\_name](#output\_target\_bucket\_name) | Name of the processed S3 bucket |
