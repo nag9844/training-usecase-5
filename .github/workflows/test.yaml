@@ -18,7 +18,7 @@ jobs:
   terraform:
     name: Terraform
     runs-on: ubuntu-latest
-    permissions:             # <--- ADD THIS BLOCK HERE!
+    permissions:             # <--- This block is correct
       contents: write        # Grant write permission specifically for this job
       pull-requests: write   # Keep pull-requests write for commenting
       id-token: write        # Keep id-token write for AWS OIDC
@@ -30,14 +30,13 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          # Use GITHUB_TOKEN to allow pushing
-          token: ${{ secrets.GITHUB_TOKEN }} # <--- Add this line to checkout with write token
-      
+          # Use GITHUB_TOKEN to allow pushing. fetch-depth: 0 is important for rebase.
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0 # Ensure full history is fetched for rebase
+
       - name: Set up Terraform
         uses: hashicorp/setup-terraform@v2
-        # with:
-        #   terraform_version: 1.6.6
-        #   cli_config_credentials_token: ${{ secrets.GITHUBTOKEN }}
+        # ... (rest of your Terraform setup)
         
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -66,41 +65,40 @@ jobs:
       - name: Install terraform-docs
         if: github.event_name == 'pull_request'
         run: |
-          # It's better to use a specific version download URL or a dedicated action for terraform-docs.
-          # For example, using the official GitHub Action for terraform-docs:
-          # uses: terraform-docs/gh-actions@v1.3.0
-          # However, if you prefer manual install:
           curl -sSLo ./terraform-docs.tar.gz https://terraform-docs.io/dl/v0.16.0/terraform-docs-v0.16.0-$(uname)-amd64.tar.gz
           tar -xzf terraform-docs.tar.gz
           chmod +x terraform-docs
           sudo mv terraform-docs /usr/local/bin/
       
-      - name: Generate Terraform Docs
+      - name: Generate Terraform Docs and Commit
         if: github.event_name == 'pull_request'
         run: |
-          terraform-docs . # This will generate README.md content as per .terraform-docs.yml
+          terraform-docs .
           git config --local user.email "vnagaraj984@gmail.com"
           git config --local user.name "nag9844"
           git add README.md
-          git diff --quiet && git diff --staged --quiet || git commit -m "docs: Update README.md"
-      
-      - name: Terraform Plan
+          # Only commit if there are changes
+          git diff --quiet --exit-code README.md || git commit -m "docs: Update README.md"
+          
+      - name: Terraform Plan and Commit
         id: plan
         if: github.event_name == 'pull_request'
         run: |
           terraform plan -no-color -input=false > plan.txt
           git add plan.txt
-          git diff --quiet && git diff --staged --quiet || git commit -m "chore: Update plan.txt"
+          # Only commit if there are changes
+          git diff --quiet --exit-code plan.txt || git commit -m "chore: Update plan.txt"
       
-      - name: Push changes
+      - name: Push generated changes
         if: github.event_name == 'pull_request'
-        run: git push origin HEAD:${{ github.head_ref }}
+        run: |
+          git pull --rebase origin ${{ github.head_ref }} # Pull changes from the PR branch
+          git push origin HEAD:${{ github.head_ref }}     # Push the rebased changes
       
       - name: Update Pull Request
         uses: actions/github-script@v6
         if: github.event_name == 'pull_request'
         env:
-          # Read plan.txt directly here for commenting, as stdout from step.plan will be empty
           PLAN_OUTPUT: ${{ steps.plan.outputs.stdout }} # This will be empty, read from file instead
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
