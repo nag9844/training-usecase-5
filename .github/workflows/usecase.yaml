@@ -8,64 +8,50 @@ on:
     branches:
       - main
 
-# Use GitHub OIDC to authenticate with AWS
-permissions:
-  id-token: write
-  contents: read
-  pull-requests: write
-
 jobs:
-  # lint-and-security:
-  #   name: Lint and Security Checks
-  #   runs-on: ubuntu-latest
-
-  #   steps:
-  #     - name: Checkout code
-  #       uses: actions/checkout@v4
-
-  #     - name: Install TFLint
-  #       run: |
-  #         wget https://github.com/terraform-linters/tflint/releases/download/v0.50.2/tflint_linux_amd64.zip
-  #         unzip tflint_linux_amd64.zip
-  #         sudo mv tflint /usr/local/bin/
-  #         tflint --version
-
-  #     - name: Run TFLint
-  #       run: tflint --init && tflint -f compact
-  #       working-directory: ./
-      
-  #     - name: Install Checkov
-  #       run: pip install checkov
-
-  #     - name: Run Checkov with soft fail
-  #       run: checkov --directory . --soft-fail
-
   terraform:
     name: Terraform
     runs-on: ubuntu-latest
-
-    env:
-      AWS_REGION: ${{ secrets.AWS_REGION || 'ap-south-1' }}
-
+    
+    # Use GitHub OIDC to authenticate with AWS
+    permissions:
+      id-token: write
+      contents: write
+      pull-requests: write
+    
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
       
-      - name: Set up Terraform
-        uses: hashicorp/setup-terraform@v2
-        # with:
-        #   terraform_version: 1.6.6
-        #   cli_config_credentials_token: ${{ secrets.GITHUBTOKEN }}
-        
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v2
         with:
-          role-to-assume: arn:aws:iam::199570228070:role/oidc-demo-role
-          aws-region: ${{ env.AWS_REGION }}
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: us-east-1
+      
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_version: 1.4.6
+          cli_config_credentials_token: ${{ secrets.TF_API_TOKEN }}
+
+      - name: Install tflint
+        run: |
+          curl -s https://raw.githubusercontent.com/terraform-linters/tflint/master/install_linux.sh | bash
+      
+      - name: Install Checkov
+        run: |
+          pip install checkov
+      
+      - name: Run tflint
+        run: tflint --recursive
+      
+      - name: Run Checkov
+        run: checkov -d . --framework terraform
       
       - name: Terraform Format
         id: fmt
-        run: terraform fmt -recursive
+        run: terraform fmt -check -recursive
       
       - name: Terraform Init
         id: init
@@ -74,7 +60,7 @@ jobs:
       - name: Terraform Validate
         id: validate
         run: terraform validate -no-color
-      
+
       - name: Setup Node.js
         if: github.event_name == 'pull_request'
         uses: actions/setup-node@v3
@@ -118,10 +104,10 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
-            const output = `#### Terraform Format and Style \`${{ steps.fmt.outcome }}\`
-            #### Terraform Initialization \`${{ steps.init.outcome }}\`
-            #### Terraform Validation \`${{ steps.validate.outcome }}\`
-            #### Terraform Plan \`${{ steps.plan.outcome }}\`
+            const output = `#### Terraform Format and Style 🖌\`${{ steps.fmt.outcome }}\`
+            #### Terraform Initialization ⚙️\`${{ steps.init.outcome }}\`
+            #### Terraform Validation 🤖\`${{ steps.validate.outcome }}\`
+            #### Terraform Plan 📖\`${{ steps.plan.outcome }}\`
             
             <details><summary>Show Plan</summary>
             
