@@ -1,44 +1,162 @@
-[command]/home/runner/work/_temp/958f45b1-0ca5-4422-80dc-892bffbc8aaa/terraform-bin plan -no-color -input=false
+[command]/home/runner/work/_temp/2bccacd4-715d-4cd2-a762-91f546aba74b/terraform-bin plan -no-color -input=false
+module.lambda.local_file.lambda_code: Refreshing state... [id=7fa3ea14c87c4a1020900d8a22933efada1654f1]
+module.lambda.null_resource.install_dependencies: Refreshing state... [id=6486892172533290355]
+random_string.suffix: Refreshing state... [id=qpjdoqdo]
+module.lambda.aws_iam_role.lambda_role: Refreshing state... [id=img-processor-dev-image-processor-qpjdoqdo-role]
+module.lambda.aws_lambda_layer_version.dependencies: Refreshing state... [id=arn:aws:lambda:ap-south-1:199570228070:layer:img-processor-dev-image-processor-qpjdoqdo-dependencies:1]
+module.sns.aws_sns_topic.notifications: Refreshing state... [id=arn:aws:sns:ap-south-1:199570228070:img-processor-dev-notifications-qpjdoqdo]
+module.s3_buckets.aws_s3_bucket.source: Refreshing state... [id=img-processor-dev-source-qpjdoqdo]
+module.s3_buckets.aws_s3_bucket.processed: Refreshing state... [id=img-processor-dev-processed-qpjdoqdo]
+module.sns.aws_sns_topic_policy.default: Refreshing state... [id=arn:aws:sns:ap-south-1:199570228070:img-processor-dev-notifications-qpjdoqdo]
+module.lambda.aws_iam_policy.lambda_sns_policy: Refreshing state... [id=arn:aws:iam::199570228070:policy/img-processor-dev-image-processor-qpjdoqdo-sns-policy]
+module.sns.aws_sns_topic_subscription.email_subscriptions[0]: Refreshing state... [id=arn:aws:sns:ap-south-1:199570228070:img-processor-dev-notifications-qpjdoqdo:27b0c78d-7b47-4d61-b66c-b60501bbcb18]
+module.lambda.aws_iam_role_policy_attachment.lambda_sns_policy_attachment: Refreshing state... [id=img-processor-dev-image-processor-qpjdoqdo-role-20250605131832827500000001]
+module.s3_buckets.aws_s3_bucket_server_side_encryption_configuration.processed_encryption: Refreshing state... [id=img-processor-dev-processed-qpjdoqdo]
+module.s3_buckets.aws_s3_bucket_versioning.processed_versioning: Refreshing state... [id=img-processor-dev-processed-qpjdoqdo]
+module.s3_buckets.aws_s3_bucket_public_access_block.processed_public_access_block: Refreshing state... [id=img-processor-dev-processed-qpjdoqdo]
+module.s3_buckets.aws_s3_bucket_server_side_encryption_configuration.source_encryption: Refreshing state... [id=img-processor-dev-source-qpjdoqdo]
+module.s3_buckets.aws_s3_bucket_versioning.source_versioning: Refreshing state... [id=img-processor-dev-source-qpjdoqdo]
+module.lambda.aws_iam_policy.lambda_s3_policy: Refreshing state... [id=arn:aws:iam::199570228070:policy/img-processor-dev-image-processor-qpjdoqdo-s3-policy]
+module.s3_buckets.aws_s3_bucket_public_access_block.source_public_access_block: Refreshing state... [id=img-processor-dev-source-qpjdoqdo]
+module.s3_buckets.aws_s3_bucket_cors_configuration.source_cors: Refreshing state... [id=img-processor-dev-source-qpjdoqdo]
+module.lambda.aws_lambda_function.image_processor: Refreshing state... [id=img-processor-dev-image-processor-qpjdoqdo]
+module.lambda.aws_iam_role_policy_attachment.lambda_s3_policy_attachment: Refreshing state... [id=img-processor-dev-image-processor-qpjdoqdo-role-20250605131836551400000002]
+module.lambda.aws_lambda_permission.allow_s3: Refreshing state... [id=AllowExecutionFromS3]
+module.lambda.aws_cloudwatch_log_group.lambda_logs: Refreshing state... [id=/aws/lambda/img-processor-dev-image-processor-qpjdoqdo]
+aws_s3_bucket_notification.bucket_notification: Refreshing state... [id=img-processor-dev-source-qpjdoqdo]
+module.lambda.aws_iam_policy.lambda_logs_policy: Refreshing state... [id=arn:aws:iam::199570228070:policy/img-processor-dev-image-processor-qpjdoqdo-logs-policy]
+module.lambda.aws_iam_role_policy_attachment.lambda_logs_policy_attachment: Refreshing state... [id=img-processor-dev-image-processor-qpjdoqdo-role-20250605131857002400000004]
+
+Note: Objects have changed outside of Terraform
+
+Terraform detected the following changes made outside of Terraform since the
+last "terraform apply" which may have affected this plan:
+
+  # module.lambda.local_file.lambda_code has been deleted
+  - resource "local_file" "lambda_code" {
+      - content              = <<-EOT
+            // Image processing Lambda function
+            const AWS = require('aws-sdk');
+            const sharp = require('sharp');
+                
+            const s3 = new AWS.S3();
+            const sns = new AWS.SNS();
+                
+            // Image sizes for resizing
+            const sizes = [
+              { width: 100, height: 100, suffix: 'thumbnail' },
+              { width: 800, height: null, suffix: 'medium' },
+              { width: 1200, height: null, suffix: 'large' }
+            ];
+                
+            exports.handler = async (event) => {
+              try {
+                // Get the object from the event
+                const sourceBucket = event.Records[0].s3.bucket.name;
+                const key = decodeURIComponent(event.Records[0].s3.object.key.replace(/\+/g, ' '));
+                    
+                // Skip processing if the file is not in the uploads folder or not an image
+                if (!key.startsWith('uploads/') || !key.match(/\.(jpg|jpeg|png|gif)$/i)) {
+                  console.log('Skipping non-image file:', key);
+                  return;
+                }
+                    
+                // Get the image from S3
+                const params = {
+                  Bucket: sourceBucket,
+                  Key: key
+                };
+                    
+                const { Body: imageBody } = await s3.getObject(params).promise();
+                    
+                // Original filename without path
+                const filename = key.split('/').pop();
+                const fileNameWithoutExt = filename.substring(0, filename.lastIndexOf('.'));
+                const extension = filename.substring(filename.lastIndexOf('.') + 1);
+                    
+                // Process image for each size
+                const resizePromises = sizes.map(async (size) => {
+                  const resizedImage = await sharp(imageBody)
+                    .resize(size.width, size.height)
+                    .toBuffer();
+                      
+                  const destKey = "processed/" + fileNameWithoutExt + "-" + size.suffix + "." + extension;
+                      
+                  await s3.putObject({
+                    Bucket: process.env.target_bucket,
+                    Key: destKey,
+                    Body: resizedImage,
+                    ContentType: "image/" + (extension === "jpg" ? "jpeg" : extension)
+                  }).promise();
+                      
+                  return destKey;
+                });
+                    
+                const resizedImageKeys = await Promise.all(resizePromises);
+                    
+                // Send notification
+                await sns.publish({
+                  TopicArn: process.env.SNS_TOPIC_ARN,
+                  Subject: 'Image Processing Completed',
+                  Message: JSON.stringify({
+                    originalImage: key,
+                    processedImages: resizedImageKeys,
+                    timestamp: new Date().toISOString()
+                  })
+                }).promise();
+                    
+                console.log('Image processing completed successfully');
+                return {
+                  statusCode: 200,
+                  body: JSON.stringify({
+                    message: 'Image processing completed successfully',
+                    originalImage: key,
+                    processedImages: resizedImageKeys
+                  })
+                };
+                    
+              } catch (error) {
+                console.error('Error processing image:', error);
+                    
+                // Send error notification
+                await sns.publish({
+                  TopicArn: process.env.SNS_TOPIC_ARN,
+                  Subject: 'Image Processing Error',
+                  Message: JSON.stringify({
+                    error: error.message,
+                    stack: error.stack,
+                    timestamp: new Date().toISOString()
+                  })
+                }).promise();
+                    
+                return {
+                  statusCode: 500,
+                  body: JSON.stringify({
+                    message: 'Error processing image',
+                    error: error.message
+                  })
+                };
+              }
+            };
+        EOT -> null
+        id                   = "7fa3ea14c87c4a1020900d8a22933efada1654f1"
+        # (9 unchanged attributes hidden)
+    }
+
+
+Unless you have made equivalent changes to your configuration, or ignored the
+relevant attributes using ignore_changes, the following plan may include
+actions to undo or respond to these changes.
+
+─────────────────────────────────────────────────────────────────────────────
 
 Terraform used the selected providers to generate the following execution
 plan. Resource actions are indicated with the following symbols:
   + create
+  ~ update in-place
  <= read (data resources)
 
 Terraform will perform the following actions:
-
-  # aws_s3_bucket_notification.bucket_notification will be created
-  + resource "aws_s3_bucket_notification" "bucket_notification" {
-      + bucket      = (known after apply)
-      + eventbridge = false
-      + id          = (known after apply)
-
-      + lambda_function {
-          + events              = [
-              + "s3:ObjectCreated:*",
-            ]
-          + filter_prefix       = "uploads/"
-          + filter_suffix       = ".jpg"
-          + id                  = (known after apply)
-          + lambda_function_arn = (known after apply)
-        }
-    }
-
-  # random_string.suffix will be created
-  + resource "random_string" "suffix" {
-      + id          = (known after apply)
-      + length      = 8
-      + lower       = true
-      + min_lower   = 0
-      + min_numeric = 0
-      + min_special = 0
-      + min_upper   = 0
-      + number      = true
-      + numeric     = true
-      + result      = (known after apply)
-      + special     = false
-      + upper       = false
-    }
 
   # module.lambda.data.archive_file.lambda_zip will be read during apply
   # (depends on a resource or a module with changes pending)
@@ -164,194 +282,18 @@ Terraform will perform the following actions:
         }
     }
 
-  # module.lambda.aws_cloudwatch_log_group.lambda_logs will be created
-  + resource "aws_cloudwatch_log_group" "lambda_logs" {
-      + arn               = (known after apply)
-      + id                = (known after apply)
-      + log_group_class   = (known after apply)
-      + name              = (known after apply)
-      + name_prefix       = (known after apply)
-      + retention_in_days = 14
-      + skip_destroy      = false
-      + tags              = (known after apply)
-      + tags_all          = (known after apply)
-    }
-
-  # module.lambda.aws_iam_policy.lambda_logs_policy will be created
-  + resource "aws_iam_policy" "lambda_logs_policy" {
-      + arn              = (known after apply)
-      + attachment_count = (known after apply)
-      + description      = "Policy for Lambda to write to CloudWatch Logs"
-      + id               = (known after apply)
-      + name             = (known after apply)
-      + name_prefix      = (known after apply)
-      + path             = "/"
-      + policy           = (known after apply)
-      + policy_id        = (known after apply)
-      + tags_all         = {
-          + "ManagedBy" = "Terraform"
-          + "Project"   = "ImageProcessor"
+  # module.lambda.aws_lambda_function.image_processor will be updated in-place
+  ~ resource "aws_lambda_function" "image_processor" {
+        id                             = "img-processor-dev-image-processor-qpjdoqdo"
+      ~ last_modified                  = "2025-06-05T13:18:47.032+0000" -> (known after apply)
+      ~ source_code_hash               = "fEV+BBiFC8q+pevnzYvi+TwgJPat0IQVmu08lH/uZVg=" -> (known after apply)
+        tags                           = {
+            "Environment" = "dev"
+            "Name"        = "img-processor-dev-image-processor-qpjdoqdo"
         }
-    }
+        # (27 unchanged attributes hidden)
 
-  # module.lambda.aws_iam_policy.lambda_s3_policy will be created
-  + resource "aws_iam_policy" "lambda_s3_policy" {
-      + arn              = (known after apply)
-      + attachment_count = (known after apply)
-      + description      = "Policy for Lambda to access S3 buckets"
-      + id               = (known after apply)
-      + name             = (known after apply)
-      + name_prefix      = (known after apply)
-      + path             = "/"
-      + policy           = (known after apply)
-      + policy_id        = (known after apply)
-      + tags_all         = {
-          + "ManagedBy" = "Terraform"
-          + "Project"   = "ImageProcessor"
-        }
-    }
-
-  # module.lambda.aws_iam_policy.lambda_sns_policy will be created
-  + resource "aws_iam_policy" "lambda_sns_policy" {
-      + arn              = (known after apply)
-      + attachment_count = (known after apply)
-      + description      = "Policy for Lambda to publish to SNS"
-      + id               = (known after apply)
-      + name             = (known after apply)
-      + name_prefix      = (known after apply)
-      + path             = "/"
-      + policy           = (known after apply)
-      + policy_id        = (known after apply)
-      + tags_all         = {
-          + "ManagedBy" = "Terraform"
-          + "Project"   = "ImageProcessor"
-        }
-    }
-
-  # module.lambda.aws_iam_role.lambda_role will be created
-  + resource "aws_iam_role" "lambda_role" {
-      + arn                   = (known after apply)
-      + assume_role_policy    = jsonencode(
-            {
-              + Statement = [
-                  + {
-                      + Action    = "sts:AssumeRole"
-                      + Effect    = "Allow"
-                      + Principal = {
-                          + Service = "lambda.amazonaws.com"
-                        }
-                    },
-                ]
-              + Version   = "2012-10-17"
-            }
-        )
-      + create_date           = (known after apply)
-      + force_detach_policies = false
-      + id                    = (known after apply)
-      + managed_policy_arns   = (known after apply)
-      + max_session_duration  = 3600
-      + name                  = (known after apply)
-      + name_prefix           = (known after apply)
-      + path                  = "/"
-      + tags                  = (known after apply)
-      + tags_all              = (known after apply)
-      + unique_id             = (known after apply)
-
-      + inline_policy (known after apply)
-    }
-
-  # module.lambda.aws_iam_role_policy_attachment.lambda_logs_policy_attachment will be created
-  + resource "aws_iam_role_policy_attachment" "lambda_logs_policy_attachment" {
-      + id         = (known after apply)
-      + policy_arn = (known after apply)
-      + role       = (known after apply)
-    }
-
-  # module.lambda.aws_iam_role_policy_attachment.lambda_s3_policy_attachment will be created
-  + resource "aws_iam_role_policy_attachment" "lambda_s3_policy_attachment" {
-      + id         = (known after apply)
-      + policy_arn = (known after apply)
-      + role       = (known after apply)
-    }
-
-  # module.lambda.aws_iam_role_policy_attachment.lambda_sns_policy_attachment will be created
-  + resource "aws_iam_role_policy_attachment" "lambda_sns_policy_attachment" {
-      + id         = (known after apply)
-      + policy_arn = (known after apply)
-      + role       = (known after apply)
-    }
-
-  # module.lambda.aws_lambda_function.image_processor will be created
-  + resource "aws_lambda_function" "image_processor" {
-      + architectures                  = (known after apply)
-      + arn                            = (known after apply)
-      + code_sha256                    = (known after apply)
-      + description                    = "Processes and resizes images from S3"
-      + filename                       = "modules/lambda/lambda_function.zip"
-      + function_name                  = (known after apply)
-      + handler                        = "index.handler"
-      + id                             = (known after apply)
-      + invoke_arn                     = (known after apply)
-      + last_modified                  = (known after apply)
-      + layers                         = (known after apply)
-      + memory_size                    = 512
-      + package_type                   = "Zip"
-      + publish                        = false
-      + qualified_arn                  = (known after apply)
-      + qualified_invoke_arn           = (known after apply)
-      + reserved_concurrent_executions = -1
-      + role                           = (known after apply)
-      + runtime                        = "nodejs18.x"
-      + signing_job_arn                = (known after apply)
-      + signing_profile_version_arn    = (known after apply)
-      + skip_destroy                   = false
-      + source_code_hash               = (known after apply)
-      + source_code_size               = (known after apply)
-      + tags                           = (known after apply)
-      + tags_all                       = (known after apply)
-      + timeout                        = 60
-      + version                        = (known after apply)
-
-      + environment {
-          + variables = (known after apply)
-        }
-
-      + ephemeral_storage (known after apply)
-
-      + logging_config (known after apply)
-
-      + tracing_config (known after apply)
-    }
-
-  # module.lambda.aws_lambda_layer_version.dependencies will be created
-  + resource "aws_lambda_layer_version" "dependencies" {
-      + arn                         = (known after apply)
-      + code_sha256                 = (known after apply)
-      + compatible_runtimes         = [
-          + "nodejs18.x",
-        ]
-      + created_date                = (known after apply)
-      + filename                    = "modules/lambda/lambda_layer.zip"
-      + id                          = (known after apply)
-      + layer_arn                   = (known after apply)
-      + layer_name                  = (known after apply)
-      + signing_job_arn             = (known after apply)
-      + signing_profile_version_arn = (known after apply)
-      + skip_destroy                = false
-      + source_code_hash            = (known after apply)
-      + source_code_size            = (known after apply)
-      + version                     = (known after apply)
-    }
-
-  # module.lambda.aws_lambda_permission.allow_s3 will be created
-  + resource "aws_lambda_permission" "allow_s3" {
-      + action              = "lambda:InvokeFunction"
-      + function_name       = (known after apply)
-      + id                  = (known after apply)
-      + principal           = "s3.amazonaws.com"
-      + source_arn          = (known after apply)
-      + statement_id        = "AllowExecutionFromS3"
-      + statement_id_prefix = (known after apply)
+        # (4 unchanged blocks hidden)
     }
 
   # module.lambda.local_file.lambda_code will be created
@@ -473,245 +415,7 @@ Terraform will perform the following actions:
       + id                   = (known after apply)
     }
 
-  # module.lambda.null_resource.install_dependencies will be created
-  + resource "null_resource" "install_dependencies" {
-      + id       = (known after apply)
-      + triggers = {
-          + "dependencies_versions" = jsonencode(
-                {
-                  + aws-sdk = "2.1450.0"
-                  + sharp   = "0.32.6"
-                }
-            )
-        }
-    }
-
-  # module.s3_buckets.aws_s3_bucket.processed will be created
-  + resource "aws_s3_bucket" "processed" {
-      + acceleration_status         = (known after apply)
-      + acl                         = (known after apply)
-      + arn                         = (known after apply)
-      + bucket                      = (known after apply)
-      + bucket_domain_name          = (known after apply)
-      + bucket_prefix               = (known after apply)
-      + bucket_regional_domain_name = (known after apply)
-      + force_destroy               = false
-      + hosted_zone_id              = (known after apply)
-      + id                          = (known after apply)
-      + object_lock_enabled         = (known after apply)
-      + policy                      = (known after apply)
-      + region                      = (known after apply)
-      + request_payer               = (known after apply)
-      + tags                        = (known after apply)
-      + tags_all                    = (known after apply)
-      + website_domain              = (known after apply)
-      + website_endpoint            = (known after apply)
-
-      + cors_rule (known after apply)
-
-      + grant (known after apply)
-
-      + lifecycle_rule (known after apply)
-
-      + logging (known after apply)
-
-      + object_lock_configuration (known after apply)
-
-      + replication_configuration (known after apply)
-
-      + server_side_encryption_configuration (known after apply)
-
-      + versioning (known after apply)
-
-      + website (known after apply)
-    }
-
-  # module.s3_buckets.aws_s3_bucket.source will be created
-  + resource "aws_s3_bucket" "source" {
-      + acceleration_status         = (known after apply)
-      + acl                         = (known after apply)
-      + arn                         = (known after apply)
-      + bucket                      = (known after apply)
-      + bucket_domain_name          = (known after apply)
-      + bucket_prefix               = (known after apply)
-      + bucket_regional_domain_name = (known after apply)
-      + force_destroy               = false
-      + hosted_zone_id              = (known after apply)
-      + id                          = (known after apply)
-      + object_lock_enabled         = (known after apply)
-      + policy                      = (known after apply)
-      + region                      = (known after apply)
-      + request_payer               = (known after apply)
-      + tags                        = (known after apply)
-      + tags_all                    = (known after apply)
-      + website_domain              = (known after apply)
-      + website_endpoint            = (known after apply)
-
-      + cors_rule (known after apply)
-
-      + grant (known after apply)
-
-      + lifecycle_rule (known after apply)
-
-      + logging (known after apply)
-
-      + object_lock_configuration (known after apply)
-
-      + replication_configuration (known after apply)
-
-      + server_side_encryption_configuration (known after apply)
-
-      + versioning (known after apply)
-
-      + website (known after apply)
-    }
-
-  # module.s3_buckets.aws_s3_bucket_cors_configuration.source_cors will be created
-  + resource "aws_s3_bucket_cors_configuration" "source_cors" {
-      + bucket = (known after apply)
-      + id     = (known after apply)
-
-      + cors_rule {
-          + allowed_headers = [
-              + "*",
-            ]
-          + allowed_methods = [
-              + "GET",
-              + "POST",
-              + "PUT",
-            ]
-          + allowed_origins = [
-              + "*",
-            ]
-          + expose_headers  = [
-              + "ETag",
-            ]
-            id              = null
-          + max_age_seconds = 3000
-        }
-    }
-
-  # module.s3_buckets.aws_s3_bucket_public_access_block.processed_public_access_block will be created
-  + resource "aws_s3_bucket_public_access_block" "processed_public_access_block" {
-      + block_public_acls       = true
-      + block_public_policy     = true
-      + bucket                  = (known after apply)
-      + id                      = (known after apply)
-      + ignore_public_acls      = true
-      + restrict_public_buckets = true
-    }
-
-  # module.s3_buckets.aws_s3_bucket_public_access_block.source_public_access_block will be created
-  + resource "aws_s3_bucket_public_access_block" "source_public_access_block" {
-      + block_public_acls       = true
-      + block_public_policy     = true
-      + bucket                  = (known after apply)
-      + id                      = (known after apply)
-      + ignore_public_acls      = true
-      + restrict_public_buckets = true
-    }
-
-  # module.s3_buckets.aws_s3_bucket_server_side_encryption_configuration.processed_encryption will be created
-  + resource "aws_s3_bucket_server_side_encryption_configuration" "processed_encryption" {
-      + bucket = (known after apply)
-      + id     = (known after apply)
-
-      + rule {
-          + apply_server_side_encryption_by_default {
-              + sse_algorithm     = "AES256"
-                # (1 unchanged attribute hidden)
-            }
-        }
-    }
-
-  # module.s3_buckets.aws_s3_bucket_server_side_encryption_configuration.source_encryption will be created
-  + resource "aws_s3_bucket_server_side_encryption_configuration" "source_encryption" {
-      + bucket = (known after apply)
-      + id     = (known after apply)
-
-      + rule {
-          + apply_server_side_encryption_by_default {
-              + sse_algorithm     = "AES256"
-                # (1 unchanged attribute hidden)
-            }
-        }
-    }
-
-  # module.s3_buckets.aws_s3_bucket_versioning.processed_versioning will be created
-  + resource "aws_s3_bucket_versioning" "processed_versioning" {
-      + bucket = (known after apply)
-      + id     = (known after apply)
-
-      + versioning_configuration {
-          + mfa_delete = (known after apply)
-          + status     = "Enabled"
-        }
-    }
-
-  # module.s3_buckets.aws_s3_bucket_versioning.source_versioning will be created
-  + resource "aws_s3_bucket_versioning" "source_versioning" {
-      + bucket = (known after apply)
-      + id     = (known after apply)
-
-      + versioning_configuration {
-          + mfa_delete = (known after apply)
-          + status     = "Enabled"
-        }
-    }
-
-  # module.sns.aws_sns_topic.notifications will be created
-  + resource "aws_sns_topic" "notifications" {
-      + arn                         = (known after apply)
-      + beginning_archive_time      = (known after apply)
-      + content_based_deduplication = false
-      + fifo_throughput_scope       = (known after apply)
-      + fifo_topic                  = false
-      + id                          = (known after apply)
-      + name                        = (known after apply)
-      + name_prefix                 = (known after apply)
-      + owner                       = (known after apply)
-      + policy                      = (known after apply)
-      + signature_version           = (known after apply)
-      + tags                        = (known after apply)
-      + tags_all                    = (known after apply)
-      + tracing_config              = (known after apply)
-    }
-
-  # module.sns.aws_sns_topic_policy.default will be created
-  + resource "aws_sns_topic_policy" "default" {
-      + arn    = (known after apply)
-      + id     = (known after apply)
-      + owner  = (known after apply)
-      + policy = (known after apply)
-    }
-
-  # module.sns.aws_sns_topic_subscription.email_subscriptions[0] will be created
-  + resource "aws_sns_topic_subscription" "email_subscriptions" {
-      + arn                             = (known after apply)
-      + confirmation_timeout_in_minutes = 1
-      + confirmation_was_authenticated  = (known after apply)
-      + endpoint                        = "vnagaraja362@gmail.com"
-      + endpoint_auto_confirms          = true
-      + filter_policy_scope             = (known after apply)
-      + id                              = (known after apply)
-      + owner_id                        = (known after apply)
-      + pending_confirmation            = (known after apply)
-      + protocol                        = "email"
-      + raw_message_delivery            = false
-      + topic_arn                       = (known after apply)
-    }
-
-Plan: 27 to add, 0 to change, 0 to destroy.
-
-Changes to Outputs:
-  + lambda_function_arn  = (known after apply)
-  + lambda_function_name = (known after apply)
-  + sns_topic_arn        = (known after apply)
-  + sns_topic_name       = (known after apply)
-  + source_bucket_arn    = (known after apply)
-  + source_bucket_name   = (known after apply)
-  + target_bucket_arn    = (known after apply)
-  + target_bucket_name   = (known after apply)
+Plan: 1 to add, 1 to change, 0 to destroy.
 
 ─────────────────────────────────────────────────────────────────────────────
 
@@ -719,6 +423,6 @@ Note: You didn't use the -out option to save this plan, so Terraform can't
 guarantee to take exactly these actions if you run "terraform apply" now.
 Releasing state lock. This may take a few moments...
 ::debug::Terraform exited with code 0.
-::debug::stdout: %0ATerraform used the selected providers to generate the following execution%0Aplan. Resource actions are indicated with the following symbols:%0A  + create%0A <= read (data resources)%0A%0ATerraform will perform the following actions:%0A%0A  # aws_s3_bucket_notification.bucket_notification will be created%0A  + resource "aws_s3_bucket_notification" "bucket_notification" {%0A      + bucket      = (known after apply)%0A      + eventbridge = false%0A      + id          = (known after apply)%0A%0A      + lambda_function {%0A          + events              = [%0A              + "s3:ObjectCreated:*",%0A            ]%0A          + filter_prefix       = "uploads/"%0A          + filter_suffix       = ".jpg"%0A          + id                  = (known after apply)%0A          + lambda_function_arn = (known after apply)%0A        }%0A    }%0A%0A  # random_string.suffix will be created%0A  + resource "random_string" "suffix" {%0A      + id          = (known after apply)%0A      + length      = 8%0A      + lower       = true%0A      + min_lower   = 0%0A      + min_numeric = 0%0A      + min_special = 0%0A      + min_upper   = 0%0A      + number      = true%0A      + numeric     = true%0A      + result      = (known after apply)%0A      + special     = false%0A      + upper       = false%0A    }%0A%0A  # module.lambda.data.archive_file.lambda_zip will be read during apply%0A  # (depends on a resource or a module with changes pending)%0A <= data "archive_file" "lambda_zip" {%0A      + id                  = (known after apply)%0A      + output_base64sha256 = (known after apply)%0A      + output_base64sha512 = (known after apply)%0A      + output_md5          = (known after apply)%0A      + output_path         = "modules/lambda/lambda_function.zip"%0A      + output_sha          = (known after apply)%0A      + output_sha256       = (known after apply)%0A      + output_sha512       = (known after apply)%0A      + output_size         = (known after apply)%0A      + type                = "zip"%0A%0A      + source {%0A          + content  = <<-EOT%0A                // Image processing Lambda function%0A                const AWS = require('aws-sdk');%0A                const sharp = require('sharp');%0A                    %0A                const s3 = new AWS.S3();%0A                const sns = new AWS.SNS();%0A                    %0A                // Image sizes for resizing%0A                const sizes = [%0A                  { width: 100, height: 100, suffix: 'thumbnail' },%0A                  { width: 800, height: null, suffix: 'medium' },%0A                  { width: 1200, height: null, suffix: 'large' }%0A                ];%0A                    %0A                exports.handler = async (event) => {%0A                  try {%0A                    // Get the object from the event%0A                    const sourceBucket = event.Records[0].s3.bucket.name;%0A                    const key = decodeURIComponent(event.Records[0].s3.object.key.replace(/\+/g, ' '));%0A                        %0A                    // Skip processing if the file is not in the uploads folder or not an image%0A                    if (!key.startsWith('uploads/') || !key.match(/\.(jpg|jpeg|png|gif)$/i)) {%0A                      console.log('Skipping non-image file:', key);%0A                      return;%0A                    }%0A                        %0A                    // Get the image from S3%0A                    const params = {%0A                      Bucket: sourceBucket,%0A                      Key: key%0A                    };%0A                        %0A                    const { Body: imageBody } = await s3.getObject(params).promise();%0A                        %0A                    // Original filename without path%0A                    const filename = key.split('/').pop();%0A                    const fileNameWithoutExt = filename.substring(0, filename.lastIndexOf('.'));%0A                    const extension = filename.substring(filename.lastIndexOf('.') + 1);%0A                        %0A                    // Process image for each size%0A                    const resizePromises = sizes.map(async (size) => {%0A                      const resizedImage = await sharp(imageBody)%0A                        .resize(size.width, size.height)%0A                        .toBuffer();%0A                          %0A                      const destKey = "processed/" + fileNameWithoutExt + "-" + size.suffix + "." + extension;%0A                          %0A                      await s3.putObject({%0A                        Bucket: process.env.target_bucket,%0A                        Key: destKey,%0A                        Body: resizedImage,%0A                        ContentType: "image/" + (extension === "jpg" ? "jpeg" : extension)%0A                      }).promise();%0A                          %0A                      return destKey;%0A                    });%0A                        %0A                    const resizedImageKeys = await Promise.all(resizePromises);%0A                        %0A                    // Send notification%0A                    await sns.publish({%0A                      TopicArn: process.env.SNS_TOPIC_ARN,%0A                      Subject: 'Image Processing Completed',%0A                      Message: JSON.stringify({%0A                        originalImage: key,%0A                        processedImages: resizedImageKeys,%0A                        timestamp: new Date().toISOString()%0A                      })%0A                    }).promise();%0A                        %0A                    console.log('Image processing completed successfully');%0A                    return {%0A                      statusCode: 200,%0A                      body: JSON.stringify({%0A                        message: 'Image processing completed successfully',%0A                        originalImage: key,%0A                        processedImages: resizedImageKeys%0A                      })%0A                    };%0A                        %0A                  } catch (error) {%0A                    console.error('Error processing image:', error);%0A                        %0A                    // Send error notification%0A                    await sns.publish({%0A                      TopicArn: process.env.SNS_TOPIC_ARN,%0A                      Subject: 'Image Processing Error',%0A                      Message: JSON.stringify({%0A                        error: error.message,%0A                        stack: error.stack,%0A                        timestamp: new Date().toISOString()%0A                      })%0A                    }).promise();%0A                        %0A                    return {%0A                      statusCode: 500,%0A                      body: JSON.stringify({%0A                        message: 'Error processing image',%0A                        error: error.message%0A                      })%0A                    };%0A                  }%0A                };%0A            EOT%0A          + filename = "index.js"%0A        }%0A    }%0A%0A  # module.lambda.aws_cloudwatch_log_group.lambda_logs will be created%0A  + resource "aws_cloudwatch_log_group" "lambda_logs" {%0A      + arn               = (known after apply)%0A      + id                = (known after apply)%0A      + log_group_class   = (known after apply)%0A      + name              = (known after apply)%0A      + name_prefix       = (known after apply)%0A      + retention_in_days = 14%0A      + skip_destroy      = false%0A      + tags              = (known after apply)%0A      + tags_all          = (known after apply)%0A    }%0A%0A  # module.lambda.aws_iam_policy.lambda_logs_policy will be created%0A  + resource "aws_iam_policy" "lambda_logs_policy" {%0A      + arn              = (known after apply)%0A      + attachment_count = (known after apply)%0A      + description      = "Policy for Lambda to write to CloudWatch Logs"%0A      + id               = (known after apply)%0A      + name             = (known after apply)%0A      + name_prefix      = (known after apply)%0A      + path             = "/"%0A      + policy           = (known after apply)%0A      + policy_id        = (known after apply)%0A      + tags_all         = {%0A          + "ManagedBy" = "Terraform"%0A          + "Project"   = "ImageProcessor"%0A        }%0A    }%0A%0A  # module.lambda.aws_iam_policy.lambda_s3_policy will be created%0A  + resource "aws_iam_policy" "lambda_s3_policy" {%0A      + arn              = (known after apply)%0A      + attachment_count = (known after apply)%0A      + description      = "Policy for Lambda to access S3 buckets"%0A      + id               = (known after apply)%0A      + name             = (known after apply)%0A      + name_prefix      = (known after apply)%0A      + path             = "/"%0A      + policy           = (known after apply)%0A      + policy_id        = (known after apply)%0A      + tags_all         = {%0A          + "ManagedBy" = "Terraform"%0A          + "Project"   = "ImageProcessor"%0A        }%0A    }%0A%0A  # module.lambda.aws_iam_policy.lambda_sns_policy will be created%0A  + resource "aws_iam_policy" "lambda_sns_policy" {%0A      + arn              = (known after apply)%0A      + attachment_count = (known after apply)%0A      + description      = "Policy for Lambda to publish to SNS"%0A      + id               = (known after apply)%0A      + name             = (known after apply)%0A      + name_prefix      = (known after apply)%0A      + path             = "/"%0A      + policy           = (known after apply)%0A      + policy_id        = (known after apply)%0A      + tags_all         = {%0A          + "ManagedBy" = "Terraform"%0A          + "Project"   = "ImageProcessor"%0A        }%0A    }%0A%0A  # module.lambda.aws_iam_role.lambda_role will be created%0A  + resource "aws_iam_role" "lambda_role" {%0A      + arn                   = (known after apply)%0A      + assume_role_policy    = jsonencode(%0A            {%0A              + Statement = [%0A                  + {%0A                      + Action    = "sts:AssumeRole"%0A                      + Effect    = "Allow"%0A                      + Principal = {%0A                          + Service = "lambda.amazonaws.com"%0A                        }%0A                    },%0A                ]%0A              + Version   = "2012-10-17"%0A            }%0A        )%0A      + create_date           = (known after apply)%0A      + force_detach_policies = false%0A      + id                    = (known after apply)%0A      + managed_policy_arns   = (known after apply)%0A      + max_session_duration  = 3600%0A      + name                  = (known after apply)%0A      + name_prefix           = (known after apply)%0A      + path                  = "/"%0A      + tags                  = (known after apply)%0A      + tags_all              = (known after apply)%0A      + unique_id             = (known after apply)%0A%0A      + inline_policy (known after apply)%0A    }%0A%0A  # module.lambda.aws_iam_role_policy_attachment.lambda_logs_policy_attachment will be created%0A  + resource "aws_iam_role_policy_attachment" "lambda_logs_policy_attachment" {%0A      + id         = (known after apply)%0A      + policy_arn = (known after apply)%0A      + role       = (known after apply)%0A    }%0A%0A  # module.lambda.aws_iam_role_policy_attachment.lambda_s3_policy_attachment will be created%0A  + resource "aws_iam_role_policy_attachment" "lambda_s3_policy_attachment" {%0A      + id         = (known after apply)%0A      + policy_arn = (known after apply)%0A      + role       = (known after apply)%0A    }%0A%0A  # module.lambda.aws_iam_role_policy_attachment.lambda_sns_policy_attachment will be created%0A  + resource "aws_iam_role_policy_attachment" "lambda_sns_policy_attachment" {%0A      + id         = (known after apply)%0A      + policy_arn = (known after apply)%0A      + role       = (known after apply)%0A    }%0A%0A  # module.lambda.aws_lambda_function.image_processor will be created%0A  + resource "aws_lambda_function" "image_processor" {%0A      + architectures                  = (known after apply)%0A      + arn                            = (known after apply)%0A      + code_sha256                    = (known after apply)%0A      + description                    = "Processes and resizes images from S3"%0A      + filename                       = "modules/lambda/lambda_function.zip"%0A      + function_name                  = (known after apply)%0A      + handler                        = "index.handler"%0A      + id                             = (known after apply)%0A      + invoke_arn                     = (known after apply)%0A      + last_modified                  = (known after apply)%0A      + layers                         = (known after apply)%0A      + memory_size                    = 512%0A      + package_type                   = "Zip"%0A      + publish                        = false%0A      + qualified_arn                  = (known after apply)%0A      + qualified_invoke_arn           = (known after apply)%0A      + reserved_concurrent_executions = -1%0A      + role                           = (known after apply)%0A      + runtime                        = "nodejs18.x"%0A      + signing_job_arn                = (known after apply)%0A      + signing_profile_version_arn    = (known after apply)%0A      + skip_destroy                   = false%0A      + source_code_hash               = (known after apply)%0A      + source_code_size               = (known after apply)%0A      + tags                           = (known after apply)%0A      + tags_all                       = (known after apply)%0A      + timeout                        = 60%0A      + version                        = (known after apply)%0A%0A      + environment {%0A          + variables = (known after apply)%0A        }%0A%0A      + ephemeral_storage (known after apply)%0A%0A      + logging_config (known after apply)%0A%0A      + tracing_config (known after apply)%0A    }%0A%0A  # module.lambda.aws_lambda_layer_version.dependencies will be created%0A  + resource "aws_lambda_layer_version" "dependencies" {%0A      + arn                         = (known after apply)%0A      + code_sha256                 = (known after apply)%0A      + compatible_runtimes         = [%0A          + "nodejs18.x",%0A        ]%0A      + created_date                = (known after apply)%0A      + filename                    = "modules/lambda/lambda_layer.zip"%0A      + id                          = (known after apply)%0A      + layer_arn                   = (known after apply)%0A      + layer_name                  = (known after apply)%0A      + signing_job_arn             = (known after apply)%0A      + signing_profile_version_arn = (known after apply)%0A      + skip_destroy                = false%0A      + source_code_hash            = (known after apply)%0A      + source_code_size            = (known after apply)%0A      + version                     = (known after apply)%0A    }%0A%0A  # module.lambda.aws_lambda_permission.allow_s3 will be created%0A  + resource "aws_lambda_permission" "allow_s3" {%0A      + action              = "lambda:InvokeFunction"%0A      + function_name       = (known after apply)%0A      + id                  = (known after apply)%0A      + principal           = "s3.amazonaws.com"%0A      + source_arn          = (known after apply)%0A      + statement_id        = "AllowExecutionFromS3"%0A      + statement_id_prefix = (known after apply)%0A    }%0A%0A  # module.lambda.local_file.lambda_code will be created%0A  + resource "local_file" "lambda_code" {%0A      + content              = <<-EOT%0A            // Image processing Lambda function%0A            const AWS = require('aws-sdk');%0A            const sharp = require('sharp');%0A                %0A            const s3 = new AWS.S3();%0A            const sns = new AWS.SNS();%0A                %0A            // Image sizes for resizing%0A            const sizes = [%0A              { width: 100, height: 100, suffix: 'thumbnail' },%0A              { width: 800, height: null, suffix: 'medium' },%0A              { width: 1200, height: null, suffix: 'large' }%0A            ];%0A                %0A            exports.handler = async (event) => {%0A              try {%0A                // Get the object from the event%0A                const sourceBucket = event.Records[0].s3.bucket.name;%0A                const key = decodeURIComponent(event.Records[0].s3.object.key.replace(/\+/g, ' '));%0A                    %0A                // Skip processing if the file is not in the uploads folder or not an image%0A                if (!key.startsWith('uploads/') || !key.match(/\.(jpg|jpeg|png|gif)$/i)) {%0A                  console.log('Skipping non-image file:', key);%0A                  return;%0A                }%0A                    %0A                // Get the image from S3%0A                const params = {%0A                  Bucket: sourceBucket,%0A                  Key: key%0A                };%0A                    %0A                const { Body: imageBody } = await s3.getObject(params).promise();%0A                    %0A                // Original filename without path%0A                const filename = key.split('/').pop();%0A                const fileNameWithoutExt = filename.substring(0, filename.lastIndexOf('.'));%0A                const extension = filename.substring(filename.lastIndexOf('.') + 1);%0A                    %0A                // Process image for each size%0A                const resizePromises = sizes.map(async (size) => {%0A                  const resizedImage = await sharp(imageBody)%0A                    .resize(size.width, size.height)%0A                    .toBuffer();%0A                      %0A                  const destKey = "processed/" + fileNameWithoutExt + "-" + size.suffix + "." + extension;%0A                      %0A                  await s3.putObject({%0A                    Bucket: process.env.target_bucket,%0A                    Key: destKey,%0A                    Body: resizedImage,%0A                    ContentType: "image/" + (extension === "jpg" ? "jpeg" : extension)%0A                  }).promise();%0A                      %0A                  return destKey;%0A                });%0A                    %0A                const resizedImageKeys = await Promise.all(resizePromises);%0A                    %0A                // Send notification%0A                await sns.publish({%0A                  TopicArn: process.env.SNS_TOPIC_ARN,%0A                  Subject: 'Image Processing Completed',%0A                  Message: JSON.stringify({%0A                    originalImage: key,%0A                    processedImages: resizedImageKeys,%0A                    timestamp: new Date().toISOString()%0A                  })%0A                }).promise();%0A                    %0A                console.log('Image processing completed successfully');%0A                return {%0A                  statusCode: 200,%0A                  body: JSON.stringify({%0A                    message: 'Image processing completed successfully',%0A                    originalImage: key,%0A                    processedImages: resizedImageKeys%0A                  })%0A                };%0A                    %0A              } catch (error) {%0A                console.error('Error processing image:', error);%0A                    %0A                // Send error notification%0A                await sns.publish({%0A                  TopicArn: process.env.SNS_TOPIC_ARN,%0A                  Subject: 'Image Processing Error',%0A                  Message: JSON.stringify({%0A                    error: error.message,%0A                    stack: error.stack,%0A                    timestamp: new Date().toISOString()%0A                  })%0A                }).promise();%0A                    %0A                return {%0A                  statusCode: 500,%0A                  body: JSON.stringify({%0A                    message: 'Error processing image',%0A                    error: error.message%0A                  })%0A                };%0A              }%0A            };%0A        EOT%0A      + content_base64sha256 = (known after apply)%0A      + content_base64sha512 = (known after apply)%0A      + content_md5          = (known after apply)%0A      + content_sha1         = (known after apply)%0A      + content_sha256       = (known after apply)%0A      + content_sha512       = (known after apply)%0A      + directory_permission = "0777"%0A      + file_permission      = "0777"%0A      + filename             = "modules/lambda/src/index.js"%0A      + id                   = (known after apply)%0A    }%0A%0A  # module.lambda.null_resource.install_dependencies will be created%0A  + resource "null_resource" "install_dependencies" {%0A      + id       = (known after apply)%0A      + triggers = {%0A          + "dependencies_versions" = jsonencode(%0A                {%0A                  + aws-sdk = "2.1450.0"%0A                  + sharp   = "0.32.6"%0A                }%0A            )%0A        }%0A    }%0A%0A  # module.s3_buckets.aws_s3_bucket.processed will be created%0A  + resource "aws_s3_bucket" "processed" {%0A      + acceleration_status         = (known after apply)%0A      + acl                         = (known after apply)%0A      + arn                         = (known after apply)%0A      + bucket                      = (known after apply)%0A      + bucket_domain_name          = (known after apply)%0A      + bucket_prefix               = (known after apply)%0A      + bucket_regional_domain_name = (known after apply)%0A      + force_destroy               = false%0A      + hosted_zone_id              = (known after apply)%0A      + id                          = (known after apply)%0A      + object_lock_enabled         = (known after apply)%0A      + policy                      = (known after apply)%0A      + region                      = (known after apply)%0A      + request_payer               = (known after apply)%0A      + tags                        = (known after apply)%0A      + tags_all                    = (known after apply)%0A      + website_domain              = (known after apply)%0A      + website_endpoint            = (known after apply)%0A%0A      + cors_rule (known after apply)%0A%0A      + grant (known after apply)%0A%0A      + lifecycle_rule (known after apply)%0A%0A      + logging (known after apply)%0A%0A      + object_lock_configuration (known after apply)%0A%0A      + replication_configuration (known after apply)%0A%0A      + server_side_encryption_configuration (known after apply)%0A%0A      + versioning (known after apply)%0A%0A      + website (known after apply)%0A    }%0A%0A  # module.s3_buckets.aws_s3_bucket.source will be created%0A  + resource "aws_s3_bucket" "source" {%0A      + acceleration_status         = (known after apply)%0A      + acl                         = (known after apply)%0A      + arn                         = (known after apply)%0A      + bucket                      = (known after apply)%0A      + bucket_domain_name          = (known after apply)%0A      + bucket_prefix               = (known after apply)%0A      + bucket_regional_domain_name = (known after apply)%0A      + force_destroy               = false%0A      + hosted_zone_id              = (known after apply)%0A      + id                          = (known after apply)%0A      + object_lock_enabled         = (known after apply)%0A      + policy                      = (known after apply)%0A      + region                      = (known after apply)%0A      + request_payer               = (known after apply)%0A      + tags                        = (known after apply)%0A      + tags_all                    = (known after apply)%0A      + website_domain              = (known after apply)%0A      + website_endpoint            = (known after apply)%0A%0A      + cors_rule (known after apply)%0A%0A      + grant (known after apply)%0A%0A      + lifecycle_rule (known after apply)%0A%0A      + logging (known after apply)%0A%0A      + object_lock_configuration (known after apply)%0A%0A      + replication_configuration (known after apply)%0A%0A      + server_side_encryption_configuration (known after apply)%0A%0A      + versioning (known after apply)%0A%0A      + website (known after apply)%0A    }%0A%0A  # module.s3_buckets.aws_s3_bucket_cors_configuration.source_cors will be created%0A  + resource "aws_s3_bucket_cors_configuration" "source_cors" {%0A      + bucket = (known after apply)%0A      + id     = (known after apply)%0A%0A      + cors_rule {%0A          + allowed_headers = [%0A              + "*",%0A            ]%0A          + allowed_methods = [%0A              + "GET",%0A              + "POST",%0A              + "PUT",%0A            ]%0A          + allowed_origins = [%0A              + "*",%0A            ]%0A          + expose_headers  = [%0A              + "ETag",%0A            ]%0A            id              = null%0A          + max_age_seconds = 3000%0A        }%0A    }%0A%0A  # module.s3_buckets.aws_s3_bucket_public_access_block.processed_public_access_block will be created%0A  + resource "aws_s3_bucket_public_access_block" "processed_public_access_block" {%0A      + block_public_acls       = true%0A      + block_public_policy     = true%0A      + bucket                  = (known after apply)%0A      + id                      = (known after apply)%0A      + ignore_public_acls      = true%0A      + restrict_public_buckets = true%0A    }%0A%0A  # module.s3_buckets.aws_s3_bucket_public_access_block.source_public_access_block will be created%0A  + resource "aws_s3_bucket_public_access_block" "source_public_access_block" {%0A      + block_public_acls       = true%0A      + block_public_policy     = true%0A      + bucket                  = (known after apply)%0A      + id                      = (known after apply)%0A      + ignore_public_acls      = true%0A      + restrict_public_buckets = true%0A    }%0A%0A  # module.s3_buckets.aws_s3_bucket_server_side_encryption_configuration.processed_encryption will be created%0A  + resource "aws_s3_bucket_server_side_encryption_configuration" "processed_encryption" {%0A      + bucket = (known after apply)%0A      + id     = (known after apply)%0A%0A      + rule {%0A          + apply_server_side_encryption_by_default {%0A              + sse_algorithm     = "AES256"%0A                # (1 unchanged attribute hidden)%0A            }%0A        }%0A    }%0A%0A  # module.s3_buckets.aws_s3_bucket_server_side_encryption_configuration.source_encryption will be created%0A  + resource "aws_s3_bucket_server_side_encryption_configuration" "source_encryption" {%0A      + bucket = (known after apply)%0A      + id     = (known after apply)%0A%0A      + rule {%0A          + apply_server_side_encryption_by_default {%0A              + sse_algorithm     = "AES256"%0A                # (1 unchanged attribute hidden)%0A            }%0A        }%0A    }%0A%0A  # module.s3_buckets.aws_s3_bucket_versioning.processed_versioning will be created%0A  + resource "aws_s3_bucket_versioning" "processed_versioning" {%0A      + bucket = (known after apply)%0A      + id     = (known after apply)%0A%0A      + versioning_configuration {%0A          + mfa_delete = (known after apply)%0A          + status     = "Enabled"%0A        }%0A    }%0A%0A  # module.s3_buckets.aws_s3_bucket_versioning.source_versioning will be created%0A  + resource "aws_s3_bucket_versioning" "source_versioning" {%0A      + bucket = (known after apply)%0A      + id     = (known after apply)%0A%0A      + versioning_configuration {%0A          + mfa_delete = (known after apply)%0A          + status     = "Enabled"%0A        }%0A    }%0A%0A  # module.sns.aws_sns_topic.notifications will be created%0A  + resource "aws_sns_topic" "notifications" {%0A      + arn                         = (known after apply)%0A      + beginning_archive_time      = (known after apply)%0A      + content_based_deduplication = false%0A      + fifo_throughput_scope       = (known after apply)%0A      + fifo_topic                  = false%0A      + id                          = (known after apply)%0A      + name                        = (known after apply)%0A      + name_prefix                 = (known after apply)%0A      + owner                       = (known after apply)%0A      + policy                      = (known after apply)%0A      + signature_version           = (known after apply)%0A      + tags                        = (known after apply)%0A      + tags_all                    = (known after apply)%0A      + tracing_config              = (known after apply)%0A    }%0A%0A  # module.sns.aws_sns_topic_policy.default will be created%0A  + resource "aws_sns_topic_policy" "default" {%0A      + arn    = (known after apply)%0A      + id     = (known after apply)%0A      + owner  = (known after apply)%0A      + policy = (known after apply)%0A    }%0A%0A  # module.sns.aws_sns_topic_subscription.email_subscriptions[0] will be created%0A  + resource "aws_sns_topic_subscription" "email_subscriptions" {%0A      + arn                             = (known after apply)%0A      + confirmation_timeout_in_minutes = 1%0A      + confirmation_was_authenticated  = (known after apply)%0A      + endpoint                        = "vnagaraja362@gmail.com"%0A      + endpoint_auto_confirms          = true%0A      + filter_policy_scope             = (known after apply)%0A      + id                              = (known after apply)%0A      + owner_id                        = (known after apply)%0A      + pending_confirmation            = (known after apply)%0A      + protocol                        = "email"%0A      + raw_message_delivery            = false%0A      + topic_arn                       = (known after apply)%0A    }%0A%0APlan: 27 to add, 0 to change, 0 to destroy.%0A%0AChanges to Outputs:%0A  + lambda_function_arn  = (known after apply)%0A  + lambda_function_name = (known after apply)%0A  + sns_topic_arn        = (known after apply)%0A  + sns_topic_name       = (known after apply)%0A  + source_bucket_arn    = (known after apply)%0A  + source_bucket_name   = (known after apply)%0A  + target_bucket_arn    = (known after apply)%0A  + target_bucket_name   = (known after apply)%0A%0A─────────────────────────────────────────────────────────────────────────────%0A%0ANote: You didn't use the -out option to save this plan, so Terraform can't%0Aguarantee to take exactly these actions if you run "terraform apply" now.%0AReleasing state lock. This may take a few moments...%0A
+::debug::stdout: module.lambda.local_file.lambda_code: Refreshing state... [id=7fa3ea14c87c4a1020900d8a22933efada1654f1]%0Amodule.lambda.null_resource.install_dependencies: Refreshing state... [id=6486892172533290355]%0Arandom_string.suffix: Refreshing state... [id=qpjdoqdo]%0Amodule.lambda.aws_iam_role.lambda_role: Refreshing state... [id=img-processor-dev-image-processor-qpjdoqdo-role]%0Amodule.lambda.aws_lambda_layer_version.dependencies: Refreshing state... [id=arn:aws:lambda:ap-south-1:199570228070:layer:img-processor-dev-image-processor-qpjdoqdo-dependencies:1]%0Amodule.sns.aws_sns_topic.notifications: Refreshing state... [id=arn:aws:sns:ap-south-1:199570228070:img-processor-dev-notifications-qpjdoqdo]%0Amodule.s3_buckets.aws_s3_bucket.source: Refreshing state... [id=img-processor-dev-source-qpjdoqdo]%0Amodule.s3_buckets.aws_s3_bucket.processed: Refreshing state... [id=img-processor-dev-processed-qpjdoqdo]%0Amodule.sns.aws_sns_topic_policy.default: Refreshing state... [id=arn:aws:sns:ap-south-1:199570228070:img-processor-dev-notifications-qpjdoqdo]%0Amodule.lambda.aws_iam_policy.lambda_sns_policy: Refreshing state... [id=arn:aws:iam::199570228070:policy/img-processor-dev-image-processor-qpjdoqdo-sns-policy]%0Amodule.sns.aws_sns_topic_subscription.email_subscriptions[0]: Refreshing state... [id=arn:aws:sns:ap-south-1:199570228070:img-processor-dev-notifications-qpjdoqdo:27b0c78d-7b47-4d61-b66c-b60501bbcb18]%0Amodule.lambda.aws_iam_role_policy_attachment.lambda_sns_policy_attachment: Refreshing state... [id=img-processor-dev-image-processor-qpjdoqdo-role-20250605131832827500000001]%0Amodule.s3_buckets.aws_s3_bucket_server_side_encryption_configuration.processed_encryption: Refreshing state... [id=img-processor-dev-processed-qpjdoqdo]%0Amodule.s3_buckets.aws_s3_bucket_versioning.processed_versioning: Refreshing state... [id=img-processor-dev-processed-qpjdoqdo]%0Amodule.s3_buckets.aws_s3_bucket_public_access_block.processed_public_access_block: Refreshing state... [id=img-processor-dev-processed-qpjdoqdo]%0Amodule.s3_buckets.aws_s3_bucket_server_side_encryption_configuration.source_encryption: Refreshing state... [id=img-processor-dev-source-qpjdoqdo]%0Amodule.s3_buckets.aws_s3_bucket_versioning.source_versioning: Refreshing state... [id=img-processor-dev-source-qpjdoqdo]%0Amodule.lambda.aws_iam_policy.lambda_s3_policy: Refreshing state... [id=arn:aws:iam::199570228070:policy/img-processor-dev-image-processor-qpjdoqdo-s3-policy]%0Amodule.s3_buckets.aws_s3_bucket_public_access_block.source_public_access_block: Refreshing state... [id=img-processor-dev-source-qpjdoqdo]%0Amodule.s3_buckets.aws_s3_bucket_cors_configuration.source_cors: Refreshing state... [id=img-processor-dev-source-qpjdoqdo]%0Amodule.lambda.aws_lambda_function.image_processor: Refreshing state... [id=img-processor-dev-image-processor-qpjdoqdo]%0Amodule.lambda.aws_iam_role_policy_attachment.lambda_s3_policy_attachment: Refreshing state... [id=img-processor-dev-image-processor-qpjdoqdo-role-20250605131836551400000002]%0Amodule.lambda.aws_lambda_permission.allow_s3: Refreshing state... [id=AllowExecutionFromS3]%0Amodule.lambda.aws_cloudwatch_log_group.lambda_logs: Refreshing state... [id=/aws/lambda/img-processor-dev-image-processor-qpjdoqdo]%0Aaws_s3_bucket_notification.bucket_notification: Refreshing state... [id=img-processor-dev-source-qpjdoqdo]%0Amodule.lambda.aws_iam_policy.lambda_logs_policy: Refreshing state... [id=arn:aws:iam::199570228070:policy/img-processor-dev-image-processor-qpjdoqdo-logs-policy]%0Amodule.lambda.aws_iam_role_policy_attachment.lambda_logs_policy_attachment: Refreshing state... [id=img-processor-dev-image-processor-qpjdoqdo-role-20250605131857002400000004]%0A%0ANote: Objects have changed outside of Terraform%0A%0ATerraform detected the following changes made outside of Terraform since the%0Alast "terraform apply" which may have affected this plan:%0A%0A  # module.lambda.local_file.lambda_code has been deleted%0A  - resource "local_file" "lambda_code" {%0A      - content              = <<-EOT%0A            // Image processing Lambda function%0A            const AWS = require('aws-sdk');%0A            const sharp = require('sharp');%0A                %0A            const s3 = new AWS.S3();%0A            const sns = new AWS.SNS();%0A                %0A            // Image sizes for resizing%0A            const sizes = [%0A              { width: 100, height: 100, suffix: 'thumbnail' },%0A              { width: 800, height: null, suffix: 'medium' },%0A              { width: 1200, height: null, suffix: 'large' }%0A            ];%0A                %0A            exports.handler = async (event) => {%0A              try {%0A                // Get the object from the event%0A                const sourceBucket = event.Records[0].s3.bucket.name;%0A                const key = decodeURIComponent(event.Records[0].s3.object.key.replace(/\+/g, ' '));%0A                    %0A                // Skip processing if the file is not in the uploads folder or not an image%0A                if (!key.startsWith('uploads/') || !key.match(/\.(jpg|jpeg|png|gif)$/i)) {%0A                  console.log('Skipping non-image file:', key);%0A                  return;%0A                }%0A                    %0A                // Get the image from S3%0A                const params = {%0A                  Bucket: sourceBucket,%0A                  Key: key%0A                };%0A                    %0A                const { Body: imageBody } = await s3.getObject(params).promise();%0A                    %0A                // Original filename without path%0A                const filename = key.split('/').pop();%0A                const fileNameWithoutExt = filename.substring(0, filename.lastIndexOf('.'));%0A                const extension = filename.substring(filename.lastIndexOf('.') + 1);%0A                    %0A                // Process image for each size%0A                const resizePromises = sizes.map(async (size) => {%0A                  const resizedImage = await sharp(imageBody)%0A                    .resize(size.width, size.height)%0A                    .toBuffer();%0A                      %0A                  const destKey = "processed/" + fileNameWithoutExt + "-" + size.suffix + "." + extension;%0A                      %0A                  await s3.putObject({%0A                    Bucket: process.env.target_bucket,%0A                    Key: destKey,%0A                    Body: resizedImage,%0A                    ContentType: "image/" + (extension === "jpg" ? "jpeg" : extension)%0A                  }).promise();%0A                      %0A                  return destKey;%0A                });%0A                    %0A                const resizedImageKeys = await Promise.all(resizePromises);%0A                    %0A                // Send notification%0A                await sns.publish({%0A                  TopicArn: process.env.SNS_TOPIC_ARN,%0A                  Subject: 'Image Processing Completed',%0A                  Message: JSON.stringify({%0A                    originalImage: key,%0A                    processedImages: resizedImageKeys,%0A                    timestamp: new Date().toISOString()%0A                  })%0A                }).promise();%0A                    %0A                console.log('Image processing completed successfully');%0A                return {%0A                  statusCode: 200,%0A                  body: JSON.stringify({%0A                    message: 'Image processing completed successfully',%0A                    originalImage: key,%0A                    processedImages: resizedImageKeys%0A                  })%0A                };%0A                    %0A              } catch (error) {%0A                console.error('Error processing image:', error);%0A                    %0A                // Send error notification%0A                await sns.publish({%0A                  TopicArn: process.env.SNS_TOPIC_ARN,%0A                  Subject: 'Image Processing Error',%0A                  Message: JSON.stringify({%0A                    error: error.message,%0A                    stack: error.stack,%0A                    timestamp: new Date().toISOString()%0A                  })%0A                }).promise();%0A                    %0A                return {%0A                  statusCode: 500,%0A                  body: JSON.stringify({%0A                    message: 'Error processing image',%0A                    error: error.message%0A                  })%0A                };%0A              }%0A            };%0A        EOT -> null%0A        id                   = "7fa3ea14c87c4a1020900d8a22933efada1654f1"%0A        # (9 unchanged attributes hidden)%0A    }%0A%0A%0AUnless you have made equivalent changes to your configuration, or ignored the%0Arelevant attributes using ignore_changes, the following plan may include%0Aactions to undo or respond to these changes.%0A%0A─────────────────────────────────────────────────────────────────────────────%0A%0ATerraform used the selected providers to generate the following execution%0Aplan. Resource actions are indicated with the following symbols:%0A  + create%0A  ~ update in-place%0A <= read (data resources)%0A%0ATerraform will perform the following actions:%0A%0A  # module.lambda.data.archive_file.lambda_zip will be read during apply%0A  # (depends on a resource or a module with changes pending)%0A <= data "archive_file" "lambda_zip" {%0A      + id                  = (known after apply)%0A      + output_base64sha256 = (known after apply)%0A      + output_base64sha512 = (known after apply)%0A      + output_md5          = (known after apply)%0A      + output_path         = "modules/lambda/lambda_function.zip"%0A      + output_sha          = (known after apply)%0A      + output_sha256       = (known after apply)%0A      + output_sha512       = (known after apply)%0A      + output_size         = (known after apply)%0A      + type                = "zip"%0A%0A      + source {%0A          + content  = <<-EOT%0A                // Image processing Lambda function%0A                const AWS = require('aws-sdk');%0A                const sharp = require('sharp');%0A                    %0A                const s3 = new AWS.S3();%0A                const sns = new AWS.SNS();%0A                    %0A                // Image sizes for resizing%0A                const sizes = [%0A                  { width: 100, height: 100, suffix: 'thumbnail' },%0A                  { width: 800, height: null, suffix: 'medium' },%0A                  { width: 1200, height: null, suffix: 'large' }%0A                ];%0A                    %0A                exports.handler = async (event) => {%0A                  try {%0A                    // Get the object from the event%0A                    const sourceBucket = event.Records[0].s3.bucket.name;%0A                    const key = decodeURIComponent(event.Records[0].s3.object.key.replace(/\+/g, ' '));%0A                        %0A                    // Skip processing if the file is not in the uploads folder or not an image%0A                    if (!key.startsWith('uploads/') || !key.match(/\.(jpg|jpeg|png|gif)$/i)) {%0A                      console.log('Skipping non-image file:', key);%0A                      return;%0A                    }%0A                        %0A                    // Get the image from S3%0A                    const params = {%0A                      Bucket: sourceBucket,%0A                      Key: key%0A                    };%0A                        %0A                    const { Body: imageBody } = await s3.getObject(params).promise();%0A                        %0A                    // Original filename without path%0A                    const filename = key.split('/').pop();%0A                    const fileNameWithoutExt = filename.substring(0, filename.lastIndexOf('.'));%0A                    const extension = filename.substring(filename.lastIndexOf('.') + 1);%0A                        %0A                    // Process image for each size%0A                    const resizePromises = sizes.map(async (size) => {%0A                      const resizedImage = await sharp(imageBody)%0A                        .resize(size.width, size.height)%0A                        .toBuffer();%0A                          %0A                      const destKey = "processed/" + fileNameWithoutExt + "-" + size.suffix + "." + extension;%0A                          %0A                      await s3.putObject({%0A                        Bucket: process.env.target_bucket,%0A                        Key: destKey,%0A                        Body: resizedImage,%0A                        ContentType: "image/" + (extension === "jpg" ? "jpeg" : extension)%0A                      }).promise();%0A                          %0A                      return destKey;%0A                    });%0A                        %0A                    const resizedImageKeys = await Promise.all(resizePromises);%0A                        %0A                    // Send notification%0A                    await sns.publish({%0A                      TopicArn: process.env.SNS_TOPIC_ARN,%0A                      Subject: 'Image Processing Completed',%0A                      Message: JSON.stringify({%0A                        originalImage: key,%0A                        processedImages: resizedImageKeys,%0A                        timestamp: new Date().toISOString()%0A                      })%0A                    }).promise();%0A                        %0A                    console.log('Image processing completed successfully');%0A                    return {%0A                      statusCode: 200,%0A                      body: JSON.stringify({%0A                        message: 'Image processing completed successfully',%0A                        originalImage: key,%0A                        processedImages: resizedImageKeys%0A                      })%0A                    };%0A                        %0A                  } catch (error) {%0A                    console.error('Error processing image:', error);%0A                        %0A                    // Send error notification%0A                    await sns.publish({%0A                      TopicArn: process.env.SNS_TOPIC_ARN,%0A                      Subject: 'Image Processing Error',%0A                      Message: JSON.stringify({%0A                        error: error.message,%0A                        stack: error.stack,%0A                        timestamp: new Date().toISOString()%0A                      })%0A                    }).promise();%0A                        %0A                    return {%0A                      statusCode: 500,%0A                      body: JSON.stringify({%0A                        message: 'Error processing image',%0A                        error: error.message%0A                      })%0A                    };%0A                  }%0A                };%0A            EOT%0A          + filename = "index.js"%0A        }%0A    }%0A%0A  # module.lambda.aws_lambda_function.image_processor will be updated in-place%0A  ~ resource "aws_lambda_function" "image_processor" {%0A        id                             = "img-processor-dev-image-processor-qpjdoqdo"%0A      ~ last_modified                  = "2025-06-05T13:18:47.032+0000" -> (known after apply)%0A      ~ source_code_hash               = "fEV+BBiFC8q+pevnzYvi+TwgJPat0IQVmu08lH/uZVg=" -> (known after apply)%0A        tags                           = {%0A            "Environment" = "dev"%0A            "Name"        = "img-processor-dev-image-processor-qpjdoqdo"%0A        }%0A        # (27 unchanged attributes hidden)%0A%0A        # (4 unchanged blocks hidden)%0A    }%0A%0A  # module.lambda.local_file.lambda_code will be created%0A  + resource "local_file" "lambda_code" {%0A      + content              = <<-EOT%0A            // Image processing Lambda function%0A            const AWS = require('aws-sdk');%0A            const sharp = require('sharp');%0A                %0A            const s3 = new AWS.S3();%0A            const sns = new AWS.SNS();%0A                %0A            // Image sizes for resizing%0A            const sizes = [%0A              { width: 100, height: 100, suffix: 'thumbnail' },%0A              { width: 800, height: null, suffix: 'medium' },%0A              { width: 1200, height: null, suffix: 'large' }%0A            ];%0A                %0A            exports.handler = async (event) => {%0A              try {%0A                // Get the object from the event%0A                const sourceBucket = event.Records[0].s3.bucket.name;%0A                const key = decodeURIComponent(event.Records[0].s3.object.key.replace(/\+/g, ' '));%0A                    %0A                // Skip processing if the file is not in the uploads folder or not an image%0A                if (!key.startsWith('uploads/') || !key.match(/\.(jpg|jpeg|png|gif)$/i)) {%0A                  console.log('Skipping non-image file:', key);%0A                  return;%0A                }%0A                    %0A                // Get the image from S3%0A                const params = {%0A                  Bucket: sourceBucket,%0A                  Key: key%0A                };%0A                    %0A                const { Body: imageBody } = await s3.getObject(params).promise();%0A                    %0A                // Original filename without path%0A                const filename = key.split('/').pop();%0A                const fileNameWithoutExt = filename.substring(0, filename.lastIndexOf('.'));%0A                const extension = filename.substring(filename.lastIndexOf('.') + 1);%0A                    %0A                // Process image for each size%0A                const resizePromises = sizes.map(async (size) => {%0A                  const resizedImage = await sharp(imageBody)%0A                    .resize(size.width, size.height)%0A                    .toBuffer();%0A                      %0A                  const destKey = "processed/" + fileNameWithoutExt + "-" + size.suffix + "." + extension;%0A                      %0A                  await s3.putObject({%0A                    Bucket: process.env.target_bucket,%0A                    Key: destKey,%0A                    Body: resizedImage,%0A                    ContentType: "image/" + (extension === "jpg" ? "jpeg" : extension)%0A                  }).promise();%0A                      %0A                  return destKey;%0A                });%0A                    %0A                const resizedImageKeys = await Promise.all(resizePromises);%0A                    %0A                // Send notification%0A                await sns.publish({%0A                  TopicArn: process.env.SNS_TOPIC_ARN,%0A                  Subject: 'Image Processing Completed',%0A                  Message: JSON.stringify({%0A                    originalImage: key,%0A                    processedImages: resizedImageKeys,%0A                    timestamp: new Date().toISOString()%0A                  })%0A                }).promise();%0A                    %0A                console.log('Image processing completed successfully');%0A                return {%0A                  statusCode: 200,%0A                  body: JSON.stringify({%0A                    message: 'Image processing completed successfully',%0A                    originalImage: key,%0A                    processedImages: resizedImageKeys%0A                  })%0A                };%0A                    %0A              } catch (error) {%0A                console.error('Error processing image:', error);%0A                    %0A                // Send error notification%0A                await sns.publish({%0A                  TopicArn: process.env.SNS_TOPIC_ARN,%0A                  Subject: 'Image Processing Error',%0A                  Message: JSON.stringify({%0A                    error: error.message,%0A                    stack: error.stack,%0A                    timestamp: new Date().toISOString()%0A                  })%0A                }).promise();%0A                    %0A                return {%0A                  statusCode: 500,%0A                  body: JSON.stringify({%0A                    message: 'Error processing image',%0A                    error: error.message%0A                  })%0A                };%0A              }%0A            };%0A        EOT%0A      + content_base64sha256 = (known after apply)%0A      + content_base64sha512 = (known after apply)%0A      + content_md5          = (known after apply)%0A      + content_sha1         = (known after apply)%0A      + content_sha256       = (known after apply)%0A      + content_sha512       = (known after apply)%0A      + directory_permission = "0777"%0A      + file_permission      = "0777"%0A      + filename             = "modules/lambda/src/index.js"%0A      + id                   = (known after apply)%0A    }%0A%0APlan: 1 to add, 1 to change, 0 to destroy.%0A%0A─────────────────────────────────────────────────────────────────────────────%0A%0ANote: You didn't use the -out option to save this plan, so Terraform can't%0Aguarantee to take exactly these actions if you run "terraform apply" now.%0AReleasing state lock. This may take a few moments...%0A
 ::debug::stderr: 
 ::debug::exitcode: 0
