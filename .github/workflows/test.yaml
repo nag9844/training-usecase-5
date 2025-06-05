@@ -11,40 +11,17 @@ on:
 # Use GitHub OIDC to authenticate with AWS
 permissions:
   id-token: write
-  contents: read
+  contents: read           # Keep read at workflow level for other jobs/steps
   pull-requests: write
 
 jobs:
-  # lint-and-security:
-  #   name: Lint and Security Checks
-  #   runs-on: ubuntu-latest
-
-  #   steps:
-  #     - name: Checkout code
-  #       uses: actions/checkout@v4
-
-  #     - name: Install TFLint
-  #       run: |
-  #         wget https://github.com/terraform-linters/tflint/releases/download/v0.50.2/tflint_linux_amd64.zip
-  #         unzip tflint_linux_amd64.zip
-  #         sudo mv tflint /usr/local/bin/
-  #         tflint --version
-
-  #     - name: Run TFLint
-  #       run: tflint --init && tflint -f compact
-  #       working-directory: ./
-      
-  #     - name: Install Checkov
-  #       run: pip install checkov
-
-  #     - name: Run Checkov with soft fail
-  #       run: checkov --directory . --soft-fail
-
   terraform:
     name: Terraform
     runs-on: ubuntu-latest
-    # permissions:
-    #   contents: write
+    permissions:             # <--- ADD THIS BLOCK HERE!
+      contents: write        # Grant write permission specifically for this job
+      pull-requests: write   # Keep pull-requests write for commenting
+      id-token: write        # Keep id-token write for AWS OIDC
 
     env:
       AWS_REGION: ${{ secrets.AWS_REGION || 'ap-south-1' }}
@@ -52,6 +29,9 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          # Use GITHUB_TOKEN to allow pushing
+          token: ${{ secrets.GITHUB_TOKEN }} # <--- Add this line to checkout with write token
       
       - name: Set up Terraform
         uses: hashicorp/setup-terraform@v2
@@ -86,6 +66,10 @@ jobs:
       - name: Install terraform-docs
         if: github.event_name == 'pull_request'
         run: |
+          # It's better to use a specific version download URL or a dedicated action for terraform-docs.
+          # For example, using the official GitHub Action for terraform-docs:
+          # uses: terraform-docs/gh-actions@v1.3.0
+          # However, if you prefer manual install:
           curl -sSLo ./terraform-docs.tar.gz https://terraform-docs.io/dl/v0.16.0/terraform-docs-v0.16.0-$(uname)-amd64.tar.gz
           tar -xzf terraform-docs.tar.gz
           chmod +x terraform-docs
@@ -94,7 +78,7 @@ jobs:
       - name: Generate Terraform Docs
         if: github.event_name == 'pull_request'
         run: |
-          terraform-docs .
+          terraform-docs . # This will generate README.md content as per .terraform-docs.yml
           git config --local user.email "vnagaraj984@gmail.com"
           git config --local user.name "nag9844"
           git add README.md
@@ -116,10 +100,20 @@ jobs:
         uses: actions/github-script@v6
         if: github.event_name == 'pull_request'
         env:
-          PLAN: "terraform\n${{ steps.plan.outputs.stdout }}"
+          # Read plan.txt directly here for commenting, as stdout from step.plan will be empty
+          PLAN_OUTPUT: ${{ steps.plan.outputs.stdout }} # This will be empty, read from file instead
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
+            const fs = require('fs');
+            let planContent = '';
+            try {
+              planContent = fs.readFileSync('plan.txt', 'utf8');
+            } catch (error) {
+              console.log('plan.txt not found, possibly no changes or plan failed.');
+              planContent = 'No plan output available or plan failed to generate.';
+            }
+
             const output = `#### Terraform Format and Style \`${{ steps.fmt.outcome }}\`
             #### Terraform Initialization \`${{ steps.init.outcome }}\`
             #### Terraform Validation \`${{ steps.validate.outcome }}\`
@@ -127,8 +121,8 @@ jobs:
             
             <details><summary>Show Plan</summary>
             
-            \`\`\`
-            ${process.env.PLAN}
+            \`\`\`hcl
+            ${planContent}
             \`\`\`
             
             </details>
