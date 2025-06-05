@@ -24,7 +24,10 @@ jobs:
   terraform:
     runs-on: ubuntu-latest
     if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.event.inputs.action != 'none')
-
+    
+    env:
+      AWS_REGION: ${{ secrets.AWS_REGION || 'ap-south-1' }}
+      
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -36,8 +39,8 @@ jobs:
       - name: Set up AWS credentials with OIDC
         uses: aws-actions/configure-aws-credentials@v3
         with:
-          role-to-assume: arn:aws:iam::557548602903:role/mytestrole-OIDC
-          aws-region: us-east-1
+          role-to-assume: arn:aws:iam::199570228070:role/oidc-demo-role
+          aws-region: ${{ env.AWS_REGION }}
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
