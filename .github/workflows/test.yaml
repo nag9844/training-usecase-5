@@ -35,25 +35,25 @@ jobs:
 
       - name: Set up Terraform
         uses: hashicorp/setup-terraform@v2
-        
+
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: arn:aws:iam::199570228070:role/oidc-demo-role
           aws-region: ${{ env.AWS_REGION }}
-      
+
       - name: Terraform Format
         id: fmt
         run: terraform fmt -recursive
-      
+
       - name: Terraform Init
         id: init
         run: terraform init
-      
+
       - name: Terraform Validate
         id: validate
         run: terraform validate -no-color
-      
+
       - name: Setup Node.js
         if: github.event_name == 'pull_request'
         uses: actions/setup-node@v3
@@ -67,32 +67,38 @@ jobs:
           tar -xzf terraform-docs.tar.gz
           chmod +x terraform-docs
           sudo mv terraform-docs /usr/local/bin/
-      
+
       - name: Generate Terraform Docs and Commit
         if: github.event_name == 'pull_request'
         run: |
           git config --local user.email "vnagaraj984@gmail.com"
           git config --local user.name "nag9844"
-          
+
           # Generate docs
           terraform-docs .
 
-          # Check if README.md has changed (exit code 0 if no changes, 1 if changes)
-          git diff --quiet --exit-code README.md || \
-          (git add README.md && git commit -m "docs: Update README.md")
+          # Always add README.md if it exists (it should after terraform-docs)
+          if [ -f README.md ]; then
+            git add README.md
+            # Attempt to commit. If no changes, this command will do nothing.
+            git commit -m "docs: Update README.md" || true
+          fi
 
       - name: Terraform Plan and Commit
         id: plan
         if: github.event_name == 'pull_request'
         run: |
-          git config --local user.email "vnagaraj984@gmail.com" # Redundant if already set, but harmless
-          git config --local user.name "nag9844"               # Redundant if already set, but harmless
+          git config --local user.email "vnagaraj984@gmail.com"
+          git config --local user.name "nag9844"
 
           terraform plan -no-color -input=false > plan.txt
-          
-          # Check if plan.txt has changed (exit code 0 if no changes, 1 if changes)
-          git diff --quiet --exit-code plan.txt || \
-          (git add plan.txt && git commit -m "chore: Update plan.txt")
+
+          # Always add plan.txt if it exists
+          if [ -f plan.txt ]; then
+            git add plan.txt
+            # Attempt to commit. If no changes, this command will do nothing.
+            git commit -m "chore: Update plan.txt" || true
+          fi
 
       - name: Push generated changes
         if: github.event_name == 'pull_request'
@@ -107,7 +113,7 @@ jobs:
           else
             echo "No changes to push from this workflow."
           fi
-      
+
       - name: Update Pull Request Comment
         uses: actions/github-script@v6
         if: github.event_name == 'pull_request'
@@ -129,28 +135,28 @@ jobs:
             #### Terraform Initialization \`${{ steps.init.outcome }}\`
             #### Terraform Validation \`${{ steps.validate.outcome }}\`
             #### Terraform Plan \`${{ steps.plan.outcome }}\`
-            
+
             <details><summary>Show Plan</summary>
-            
+
             \`\`\`hcl
             ${planContent}
             \`\`\`
-            
+
             </details>
-            
+
             *Pushed by: @${{ github.actor }}, Action: \`${{ github.event_name }}\`*`;
-            
+
             github.rest.issues.createComment({
               issue_number: context.issue.number,
               owner: context.repo.owner,
               repo: context.repo.repo,
               body: output
             })
-      
+
       - name: Terraform Plan Status
-        if: steps.plan.outcome == 'failure'
+        if: steps.plan.outcome == 'failure' && github.event_name == 'pull_request' # Only fail PR if plan fails
         run: exit 1
-      
+
       - name: Terraform Apply
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
         run: terraform apply -auto-approve -input=false
