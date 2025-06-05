@@ -1,9 +1,6 @@
 name: Terraform CI/CD
 
 on:
-  push:
-    branches:
-      - main
   pull_request:
     branches:
       - main
@@ -18,7 +15,7 @@ jobs:
   terraform:
     name: Terraform
     runs-on: ubuntu-latest
-    permissions:             # <--- This block is correct
+    permissions:             #
       contents: write        # Grant write permission specifically for this job
       pull-requests: write   # Keep pull-requests write for commenting
       id-token: write        # Keep id-token write for AWS OIDC
