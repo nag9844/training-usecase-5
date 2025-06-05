@@ -1,0 +1,103 @@
+name: Provision Infra using Terraform via EC2
+ 
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: 'Terraform action to perform (apply/destroy)'
+        required: true
+        default: 'apply'
+        type: choice
+        options:
+          - apply
+          - destroy
+ 
+permissions:
+  id-token: write
+  contents: write
+ 
+jobs:
+  provision:
+    name: Terraform Infra via EC2
+    runs-on: ubuntu-latest
+ 
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+ 
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::199570228070:role/oidc-demo-role
+          aws-region: ap-south-1
+ 
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.10.5
+ 
+      - name: Set up Node js
+        uses: actions/setup-node@v3
+        with:
+          node-version: 18   
+ 
+      - name: Install dependencies and create ZIP
+        run: |
+          ls 
+          cd file/js
+          npm install 
+          zip -r ../../file/js/image_resizer.zip .
+ 
+      - name: Terraform format
+        run: terraform fmt
+ 
+      - name: Terraform init
+        run: terraform init
+ 
+      - name: Install Checkov
+        run: |
+          python3 -m pip install --upgrade pip
+          pip install checkov
+ 
+      - name: Run Checkov Scan
+        run: checkov -d ./ --skip-path .github/* --soft-fail  
+ 
+      - name: Install tflint
+        run: |
+          curl -s https://raw.githubusercontent.com/terraform-linters/tflint/master/install_linux.sh | bash
+ 
+      - name: Run tflint with custom config
+        run: |
+          echo "Using custom rules from .tflint.hcl"
+          tflint --config=./.tflint.hcl
+        continue-on-error: true
+ 
+      - name: Install terraform-docs
+        run: |
+          curl -sSLo terraform-docs.tar.gz https://terraform-docs.io/dl/v0.20.0/terraform-docs-v0.20.0-linux-amd64.tar.gz
+          tar -xzf terraform-docs.tar.gz
+          chmod +x terraform-docs
+          sudo mv terraform-docs /usr/local/bin/
+ 
+ 
+      - name: Generate Terraform Docs
+        run: |
+          terraform-docs markdown table . > PLAN.md
+ 
+      - name: Commit Terraform Docs
+        run: |
+          git config --global user.name "github-actions"
+          git config --global user.email "github-actions@github.com"
+          git add README.md
+          git commit -m "Update Terraform docs [skip ci]" || echo "No changes to commit"
+          git push
+      - name: Terraform plan
+        run: terraform plan
+ 
+      - name: Terraform Apply or Destroy
+        run: |
+          if [[ "${{ github.event.inputs.action }}" == "destroy" ]]; then
+            terraform destroy -auto-approve
+          else
+            terraform apply -auto-approve
+          fi
