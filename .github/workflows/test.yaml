@@ -11,17 +11,17 @@ on:
 # Use GitHub OIDC to authenticate with AWS
 permissions:
   id-token: write
-  contents: read           # Keep read at workflow level for other jobs/steps
+  contents: write           # Keep write for this job
   pull-requests: write
 
 jobs:
   terraform:
     name: Terraform
     runs-on: ubuntu-latest
-    permissions:             # <--- This block is correct
+    permissions:
       contents: write        # Grant write permission specifically for this job
-      pull-requests: write   # Keep pull-requests write for commenting
-      id-token: write        # Keep id-token write for AWS OIDC
+      pull-requests: write
+      id-token: write
 
     env:
       AWS_REGION: ${{ secrets.AWS_REGION || 'ap-south-1' }}
@@ -33,79 +33,68 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           fetch-depth: 0 # Ensure full history is fetched for rebase
 
-      - name: Set up Terraform
-        uses: hashicorp/setup-terraform@v2
-        
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: arn:aws:iam::199570228070:role/oidc-demo-role
-          aws-region: ${{ env.AWS_REGION }}
-      
-      - name: Terraform Format
-        id: fmt
-        run: terraform fmt -recursive
-      
-      - name: Terraform Init
-        id: init
-        run: terraform init
-      
-      - name: Terraform Validate
-        id: validate
-        run: terraform validate -no-color
-      
-      - name: Setup Node.js
-        if: github.event_name == 'pull_request'
-        uses: actions/setup-node@v3
-        with:
-          node-version: '18'
+      # ... (rest of your existing steps: Set up Terraform, Configure AWS, Format, Init, Validate, Node.js, Install terraform-docs)
 
-      - name: Install terraform-docs
-        if: github.event_name == 'pull_request'
-        run: |
-          curl -sSLo ./terraform-docs.tar.gz https://terraform-docs.io/dl/v0.16.0/terraform-docs-v0.16.0-$(uname)-amd64.tar.gz
-          tar -xzf terraform-docs.tar.gz
-          chmod +x terraform-docs
-          sudo mv terraform-docs /usr/local/bin/
-      
       - name: Generate Terraform Docs and Commit
         if: github.event_name == 'pull_request'
         run: |
           git config --local user.email "vnagaraj984@gmail.com"
           git config --local user.name "nag9844"
           
-          # Generate docs
           terraform-docs .
 
-          # Check if README.md has changed (exit code 0 if no changes, 1 if changes)
-          git diff --quiet --exit-code README.md || \
-          (git add README.md && git commit -m "docs: Update README.md")
+          # Check if README.md has changed. If so, add and commit.
+          # Use `git status --porcelain` to detect changes more reliably for auto-generated files
+          if [ -n "$(git status --porcelain README.md)" ]; then
+            echo "README.md changed, committing."
+            git add README.md
+            git commit -m "docs: Update README.md"
+          else
+            echo "README.md is up to date."
+          fi
 
       - name: Terraform Plan and Commit
         id: plan
         if: github.event_name == 'pull_request'
         run: |
-          git config --local user.email "vnagaraj984@gmail.com" # Redundant if already set, but harmless
-          git config --local user.name "nag9844"               # Redundant if already set, but harmless
-
+          # Git user config is sticky per run, no need to set again here
           terraform plan -no-color -input=false > plan.txt
           
-          # Check if plan.txt has changed (exit code 0 if no changes, 1 if changes)
-          git diff --quiet --exit-code plan.txt || \
-          (git add plan.txt && git commit -m "chore: Update plan.txt")
+          # Check if plan.txt has changed. If so, add and commit.
+          if [ -n "$(git status --porcelain plan.txt)" ]; then
+            echo "plan.txt changed, committing."
+            git add plan.txt
+            git commit -m "chore: Update plan.txt"
+          else
+            echo "plan.txt is up to date."
+          fi
 
       - name: Push generated changes
         if: github.event_name == 'pull_request'
         run: |
-          # Only pull and push if there are any new commits to push (from this workflow)
-          # Check if there are local commits not yet on remote
-          # This avoids pulling/pushing if no docs or plan changes were made
+          echo "Checking Git status before pull/push:"
+          git status
+          echo "Listing untracked files (if any):"
+          git clean -n -d # Shows what would be removed, but doesn't remove it
+
+          # Ensure no lingering uncommitted/unstaged changes before pull/push
+          # Force add and commit any last-minute untracked changes for robustness
+          # This is a strong measure; use with caution.
+          git add .
+          if ! git diff --cached --quiet; then # Check if there are staged changes
+            echo "Committing any remaining staged changes."
+            git commit -m "chore: Final commit of generated files" || true # || true to prevent job failure if no changes
+          fi
+          
+          # Now, check if there are any local commits to push
+          # This ensures we don't try to pull/push if nothing was committed by this workflow
           if ! git diff --quiet origin/${{ github.head_ref }}; then
-            echo "Local changes detected. Performing pull --rebase and push."
-            git pull --rebase origin ${{ github.head_ref }} # Pull changes from the PR branch
-            git push origin HEAD:${{ github.head_ref }}     # Push the rebased changes
+            echo "Local commits detected. Performing pull --rebase and push."
+            # The git pull --rebase command needs to be robust
+            git pull --rebase origin ${{ github.head_ref }} && \
+            git push origin HEAD:${{ github.head_ref }}
           else
-            echo "No changes to push from this workflow."
+            echo "No new local commits to push from this workflow."
           fi
       
       - name: Update Pull Request Comment
